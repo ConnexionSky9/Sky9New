@@ -693,6 +693,11 @@
     font-family:'Oswald', sans-serif; font-weight:600; font-size:18px; padding: 5px 8px; border-radius:2px;
   }
   .debt-amount-edit input.debt-amount-input:focus{ outline:none; border-color: var(--gold); }
+  .debt-paid-check{
+    display:flex; align-items:center; gap:8px; margin-top:10px; cursor:pointer;
+    font-family:'IBM Plex Sans', sans-serif; font-size:13px; color: var(--text-dim);
+  }
+  .debt-paid-check input[type="checkbox"]{ width:16px; height:16px; accent-color: var(--gold); cursor:pointer; }
   .emp-row .ename{ font-family:'Oswald', sans-serif; font-weight:600; font-size:14.5px; }
   .emp-row select{
     background: var(--bg-card); border: 1px solid var(--line); color: var(--text);
@@ -1648,6 +1653,12 @@
             <div class="value" id="kpiOnDuty">0</div>
             <div class="sub" id="kpiOnDutySub">actuellement</div>
           </div>
+        </div>
+
+        <div class="requests-block">
+          <h2>Revenu par entreprise cette semaine</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Ne compte que les paiements validés (cochés comme payés en Facturation) — pas les annonces simplement acceptées.</p>
+          <div id="weeklyCompanyRecap"></div>
         </div>
 
         <div class="kpi-row">
@@ -4595,22 +4606,32 @@
     return list.filter(a => a.company === company).reduce((sum, a) => sum + a.amount, 0);
   }
 
+  // ---------- Paiements validés (Facturation) ----------
+  // Chaque fois qu'une entreprise est cochée comme "payée" dans Facturation, on
+  // enregistre ici le montant exact validé à ce moment (annonces + corrections
+  // manuelles éventuelles). Le Revenu / semaine et l'Impôt ne comptent QUE ces
+  // paiements validés — jamais les annonces simplement acceptées mais pas encore payées.
+  const LS_PAYMENTS_KEY = 'echonews_company_payments';
+  function loadPayments(){
+    try{
+      const raw = localStorage.getItem(LS_PAYMENTS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    }catch(e){ return []; }
+  }
+  function savePayments(list){
+    try{ localStorage.setItem(LS_PAYMENTS_KEY, JSON.stringify(list)); }catch(e){}
+  }
+
   function computeWeeklyCA(){
     const range = getWeekRange();
     const revenueMarker = loadRevenueResetMarker();
-    const accepted = loadRequests().filter(r =>
-      r.status === 'accepted' &&
-      isActiveThisWeek(r, range) &&
-      (!revenueMarker || (r.acceptedAt && r.acceptedAt >= revenueMarker))
+    // On ne compte QUE les paiements validés (cochés comme payés en Facturation),
+    // jamais les annonces simplement acceptées mais pas encore payées.
+    const payments = loadPayments().filter(p =>
+      p.ts >= range.start.getTime() && p.ts <= range.end.getTime() &&
+      (!revenueMarker || p.ts >= revenueMarker)
     );
-    // Les corrections manuelles faites cette semaine sur le montant dû d'une
-    // entreprise (Facturation) impactent directement le CA de la semaine.
-    const debtAdjustments = loadDebtAdjustments().filter(a =>
-      a.ts >= range.start.getTime() && a.ts <= range.end.getTime() &&
-      (!revenueMarker || a.ts >= revenueMarker)
-    );
-    const debtAdjustmentsTotal = debtAdjustments.reduce((sum, a) => sum + a.amount, 0);
-    const adsCa = accepted.reduce((sum, r) => sum + r.total, 0) + debtAdjustmentsTotal;
+    const adsCa = payments.reduce((sum, p) => sum + p.amount, 0);
 
     const expenses = loadExpenses().filter(e =>
       e.ts >= range.start.getTime() && e.ts <= range.end.getTime() &&
@@ -4619,7 +4640,7 @@
     const expensesTotal = expenses.reduce((sum, e) => sum + e.amount, 0);
 
     const total = Math.max(0, adsCa - expensesTotal);
-    return { range, accepted, adsCa, expenses, expensesTotal, debtAdjustmentsTotal, total };
+    return { range, payments, adsCa, expenses, expensesTotal, total };
   }
 
   function renderDebts(){
@@ -4651,16 +4672,16 @@
       const amountHtml = isFullyPaid
         ? `<span class="badge accepted">Payé</span>`
         : `<span class="debt-amount-edit">$<input type="number" class="debt-amount-input" data-company="${escapeHtml(name)}" min="0" step="1000" value="${displayedOwed}"></span>`;
-      const actionsHtml = isFullyPaid
-        ? ''
-        : `<div class="request-actions"><button class="btn-accept" data-action="mark-paid" data-company="${escapeHtml(name)}">Marquer comme payé</button></div>`;
       return `
         <div class="active-ad-card" data-company="${escapeHtml(name)}">
           <div class="active-ad-top">
             <span class="aacompany">${escapeHtml(name)}</span>
             ${amountHtml}
           </div>
-          ${actionsHtml}
+          <label class="debt-paid-check">
+            <input type="checkbox" data-action="toggle-paid" data-company="${escapeHtml(name)}" ${isFullyPaid ? 'checked' : ''}>
+            L'entreprise a payé
+          </label>
         </div>
       `;
     }).join('');
@@ -4670,7 +4691,7 @@
         <div class="kpi">
           <div class="label">Total dû par l'ensemble des entreprises</div>
           <div class="value">${formatUSD(grandTotal)}</div>
-          <div class="sub">${names.length} entreprise(s) au total — modifie un montant en cas d'erreur, il se répercute automatiquement dans le Revenu / semaine.</div>
+          <div class="sub">${names.length} entreprise(s) au total — modifie un montant en cas d'erreur, il se répercute automatiquement dans le Revenu / semaine une fois validé.</div>
         </div>
       </div>
       ${rows}
@@ -4693,24 +4714,63 @@
         logCompanyHistory(company, 'debt_adjusted', `Montant dû corrigé manuellement (${delta > 0 ? '+' : ''}${formatUSD(delta)})`, { by, newTotal: newVal });
         renderDebts();
         if(typeof renderTax === 'function') renderTax();
+        if(typeof renderOverviewStats === 'function') renderOverviewStats();
         showSavedIndicator();
       };
       input.addEventListener('change', commit);
       input.addEventListener('blur', commit);
     });
 
-    container.querySelectorAll('button[data-action="mark-paid"]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const company = btn.dataset.company;
-        const list = loadRequests();
-        list.forEach(r => {
-          if(r.company === company && r.status === 'accepted' && !r.paid){ r.paid = true; }
-        });
-        saveRequests(list);
+    container.querySelectorAll('input[data-action="toggle-paid"]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const company = cb.dataset.company;
         const by = session ? session.name : 'Direction';
-        addLog(`<b>${escapeHtml(company)}</b> marquée comme ayant payé son solde par <b>${escapeHtml(by)}</b>.`);
-        logCompanyHistory(company, 'marked_paid', 'Solde marqué comme payé', { by });
+        if(cb.checked){
+          // ---- Marquer comme payé : on valide le montant actuel (annonces + corrections) ----
+          const list = loadRequests();
+          const targets = list.filter(r => r.company === company && r.status === 'accepted' && !r.paid);
+          const requestIds = targets.map(r => r.id);
+          const rawSum = targets.reduce((sum, r) => sum + r.total, 0);
+          const allAdjustments = loadDebtAdjustments();
+          const companyAdjustments = allAdjustments.filter(a => a.company === company);
+          const otherAdjustments = allAdjustments.filter(a => a.company !== company);
+          const adjustmentTotal = companyAdjustments.reduce((sum, a) => sum + a.amount, 0);
+          const amount = Math.max(0, rawSum + adjustmentTotal);
+
+          targets.forEach(r => { r.paid = true; });
+          saveRequests(list);
+          saveDebtAdjustments(otherAdjustments);
+
+          const payments = loadPayments();
+          payments.unshift({ id: 'pay_' + Date.now(), company, amount, ts: Date.now(), by, requestIds, removedAdjustments: companyAdjustments });
+          savePayments(payments);
+
+          addLog(`<b>${escapeHtml(company)}</b> marquée comme ayant payé <b>${formatUSD(amount)}</b> par <b>${escapeHtml(by)}</b>.`);
+          logCompanyHistory(company, 'marked_paid', `Solde marqué comme payé (${formatUSD(amount)})`, { by, amount });
+        }else{
+          // ---- Décocher : annule le dernier paiement validé pour cette entreprise ----
+          const payments = loadPayments();
+          const idx = payments.findIndex(p => p.company === company);
+          if(idx === -1) return;
+          const payment = payments[idx];
+
+          const list = loadRequests();
+          list.forEach(r => { if(payment.requestIds && payment.requestIds.includes(r.id)) r.paid = false; });
+          saveRequests(list);
+
+          const adjustments = loadDebtAdjustments().concat(payment.removedAdjustments || []);
+          saveDebtAdjustments(adjustments);
+
+          payments.splice(idx, 1);
+          savePayments(payments);
+
+          addLog(`Paiement de <b>${formatUSD(payment.amount)}</b> annulé pour <b>${escapeHtml(company)}</b> par <b>${escapeHtml(by)}</b>.`);
+          logCompanyHistory(company, 'payment_cancelled', `Paiement annulé (${formatUSD(payment.amount)})`, { by });
+        }
         renderDebts();
+        if(typeof renderTax === 'function') renderTax();
+        if(typeof renderOverviewStats === 'function') renderOverviewStats();
+        showSavedIndicator();
       });
     });
   }
@@ -4872,14 +4932,14 @@
 
     const weekLabel = wk.range.start.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'}) + ' au ' + wk.range.end.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'});
 
-    const rows = wk.accepted.length
-      ? wk.accepted.map(r => `
+    const rows = wk.payments.length
+      ? wk.payments.map(p => `
           <div class="cs-ad">
-            <span class="cstxt"><b>${escapeHtml(r.company)}</b> — ${escapeHtml(r.text)}</span>
-            <span>${formatUSD(r.total)}</span>
+            <span class="cstxt"><b>${escapeHtml(p.company)}</b> — payé le ${new Date(p.ts).toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'})}</span>
+            <span>${formatUSD(p.amount)}</span>
           </div>
         `).join('')
-      : '<p class="requests-empty">Aucune annonce active cette semaine.</p>';
+      : '<p class="requests-empty">Aucun paiement validé cette semaine.</p>';
 
     const expenseRows = wk.expenses.length
       ? wk.expenses.map(e => `
@@ -4990,8 +5050,9 @@
     if(revenueEl){
       const wk = computeWeeklyCA();
       revenueEl.textContent = formatUSD(wk.total);
-      if(revenueSubEl) revenueSubEl.textContent = wk.accepted.length + ' annonce(s) actives cette semaine';
+      if(revenueSubEl) revenueSubEl.textContent = wk.payments.length + ' paiement(s) validé(s) cette semaine';
     }
+    renderWeeklyCompanyRecap();
 
     const effectifEl = document.getElementById('kpiEffectif');
     if(effectifEl) effectifEl.textContent = loadEmployeeAccounts().length;
@@ -5031,6 +5092,27 @@
         <div class="active-ad-top">
           <span class="aacompany">#${i+1} — ${escapeHtml(r.name)}</span>
           <span class="cstotal" style="font-family:'Oswald',sans-serif; font-weight:600; font-size:16px; color:var(--gold);">${r.count} annonce(s)</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderWeeklyCompanyRecap(){
+    const container = document.getElementById('weeklyCompanyRecap');
+    if(!container) return;
+    const wk = computeWeeklyCA();
+    if(wk.payments.length === 0){
+      container.innerHTML = '<p class="requests-empty">Aucun paiement validé cette semaine pour le moment.</p>';
+      return;
+    }
+    const byCompany = {};
+    wk.payments.forEach(p => { byCompany[p.company] = (byCompany[p.company] || 0) + p.amount; });
+    const names = Object.keys(byCompany).sort((a,b) => byCompany[b] - byCompany[a]);
+    container.innerHTML = names.map(name => `
+      <div class="active-ad-card" data-company="${escapeHtml(name)}">
+        <div class="active-ad-top">
+          <span class="aacompany">${escapeHtml(name)}</span>
+          <span class="cstotal" style="font-family:'Oswald',sans-serif; font-weight:600; font-size:18px; color:var(--gold);">${formatUSD(byCompany[name])}</span>
         </div>
       </div>
     `).join('');
@@ -5169,7 +5251,8 @@
     'echonews_tax_history', 'echonews_logs', 'echonews_completed_ads', 'echonews_duty_status',
     'echonews_duty_totals', 'echonews_grades', 'echonews_employee_grades', 'echonews_week_reset_marker',
     'echonews_company_prices', 'echonews_company_balances', 'echonews_grade_permissions',
-    'echonews_week_expenses', 'echonews_revenue_reset_marker', 'echonews_debt_adjustments'
+    'echonews_week_expenses', 'echonews_revenue_reset_marker', 'echonews_debt_adjustments',
+    'echonews_company_payments'
   ];
 
   let cloudDb = null;
@@ -5215,7 +5298,8 @@
           'renderGradesManagement', 'renderGradePermissionsTable', 'renderIdentifiants',
           'renderEmpIdentifiantsList', 'renderSalary', 'renderBroadcastPlanning',
           'renderMyRequests', 'renderMyRechargeRequests', 'renderCompanyProfile',
-          'renderPricingPicker', 'renderCreditCompanyPicker', 'renderDebts', 'renderTax', 'applySession'
+          'renderPricingPicker', 'renderCreditCompanyPicker', 'renderDebts', 'renderTax',
+          'renderOverviewStats', 'renderWeeklyCompanyRecap', 'applySession'
         ];
         fns.forEach(name => {
           try{ if(typeof window[name] === 'function') window[name](); }catch(e){}
