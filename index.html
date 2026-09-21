@@ -1895,9 +1895,13 @@
             <label for="manualInvoiceLabel">Motif (optionnel)</label>
             <input type="text" id="manualInvoiceLabel" placeholder="Ex : Rattrapage annonce papier">
           </div>
-          <p style="font-size:13px; color:var(--text-dim); margin:0 0 14px;">Montant actuellement dû : <b id="manualInvoiceCompanyBalance" style="color:var(--gold);">$0</b></p>
+          <p style="font-size:13px; color:var(--text-dim); margin:0 0 14px;">Montant actuellement dû (annonces non payées) : <b id="manualInvoiceCompanyBalance" style="color:var(--gold);">$0</b></p>
           <button class="ad-submit" id="manualInvoiceBtn" style="margin-bottom:10px;">Ajouter la facturation</button>
           <div id="manualInvoiceResult"></div>
+          <div style="margin-top:20px;">
+            <p style="font-size:12px; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:10px;">Facturations manuelles récentes</p>
+            <div id="manualInvoicesList"><p class="requests-empty">Aucune facturation manuelle pour le moment.</p></div>
+          </div>
         </div>
 
         <div class="requests-block">
@@ -4359,6 +4363,41 @@
       picker.addEventListener('change', renderManualInvoiceBalance);
     }
     renderManualInvoiceBalance();
+    renderManualInvoicesList();
+  }
+
+  function renderManualInvoicesList(){
+    const container = document.getElementById('manualInvoicesList');
+    if(!container) return;
+    const list = loadPayments().filter(p => p.manual).slice(0, 15);
+    if(list.length === 0){
+      container.innerHTML = '<p class="requests-empty">Aucune facturation manuelle pour le moment.</p>';
+      return;
+    }
+    container.innerHTML = list.map(p => `
+      <div class="account-row" data-id="${escapeHtml(p.id)}">
+        <span class="aname">${escapeHtml(p.company)}</span>
+        <span class="acreds">${formatUSD(p.amount)} — ${escapeHtml(p.label || 'Facturation manuelle')} — ${new Date(p.ts).toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'})}</span>
+        <button data-action="cancel-manual-invoice" data-id="${escapeHtml(p.id)}">Annuler</button>
+      </div>
+    `).join('');
+    container.querySelectorAll('button[data-action="cancel-manual-invoice"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const payments = loadPayments();
+        const idx = payments.findIndex(p => p.id === btn.dataset.id);
+        if(idx === -1) return;
+        const payment = payments[idx];
+        payments.splice(idx, 1);
+        savePayments(payments);
+        const by = session ? session.name : 'Direction';
+        addLog(`Facturation manuelle de <b>${formatUSD(payment.amount)}</b> annulée pour <b>${escapeHtml(payment.company)}</b> par <b>${escapeHtml(by)}</b>.`);
+        logCompanyHistory(payment.company, 'payment_cancelled', `Facturation manuelle annulée (${formatUSD(payment.amount)})`, { by });
+        renderManualInvoicesList();
+        if(typeof renderTax === 'function') renderTax();
+        if(typeof renderOverviewStats === 'function') renderOverviewStats();
+        showSavedIndicator();
+      });
+    });
   }
 
   const manualInvoiceBtn = document.getElementById('manualInvoiceBtn');
@@ -4377,21 +4416,28 @@
         return;
       }
       const label = (labelInput ? labelInput.value.trim() : '') || 'Facturation manuelle';
-      const list = loadDebtAdjustments();
-      list.push({ id: 'adj_' + Date.now(), company, amount, ts: Date.now() });
-      saveDebtAdjustments(list);
 
+      // La facturation manuelle est validée directement par la Direction : elle
+      // compte immédiatement comme un paiement (Revenu / semaine + Impôt),
+      // sans passer par la case à cocher de l'onglet Facturation.
       const by = session ? session.name : 'Direction';
-      addLog(`Facturation manuelle de <b>${formatUSD(amount)}</b> ajoutée pour <b>${escapeHtml(company)}</b> (${escapeHtml(label)}) par <b>${escapeHtml(by)}</b>.`);
-      logCompanyHistory(company, 'manual_invoice', `Facturation manuelle ajoutée : ${label} (${formatUSD(amount)})`, { by, amount, label });
+      const payments = loadPayments();
+      payments.unshift({ id: 'pay_' + Date.now(), company, amount, ts: Date.now(), by, requestIds: [], removedAdjustments: [], manual: true, label });
+      savePayments(payments);
+
+      addLog(`Facturation manuelle de <b>${formatUSD(amount)}</b> validée pour <b>${escapeHtml(company)}</b> (${escapeHtml(label)}) par <b>${escapeHtml(by)}</b>.`);
+      logCompanyHistory(company, 'manual_invoice', `Facturation manuelle validée : ${label} (${formatUSD(amount)})`, { by, amount, label });
 
       if(input) input.value = '';
       if(labelInput) labelInput.value = '';
       renderManualInvoiceBalance();
+      renderManualInvoicesList();
       renderDebts();
+      if(typeof renderTax === 'function') renderTax();
+      if(typeof renderOverviewStats === 'function') renderOverviewStats();
       showSavedIndicator();
       if(resultEl){
-        resultEl.innerHTML = `<p style="color:var(--gold); font-size:13px; margin-top:6px;">✓ ${formatUSD(amount)} ajouté(s) à la facturation de ${escapeHtml(company)}. Nouveau montant dû : ${formatUSD(getCompanyDisplayedOwed(company))}. Il faudra le cocher comme payé dans l'onglet Facturation pour qu'il compte dans le Revenu / semaine et l'Impôt.</p>`;
+        resultEl.innerHTML = `<p style="color:var(--gold); font-size:13px; margin-top:6px;">✓ ${formatUSD(amount)} validé(s) pour ${escapeHtml(company)} — déjà comptés dans le Revenu / semaine et l'Impôt.</p>`;
       }
     });
   }
@@ -4880,7 +4926,10 @@
     service_accept: 'Demande spéciale acceptée',
     service_refuse: 'Demande spéciale refusée',
     diffusion: 'Annonce diffusée',
-    marked_paid: 'Solde marqué comme payé'
+    marked_paid: 'Solde marqué comme payé',
+    debt_adjusted: 'Montant dû corrigé manuellement',
+    payment_cancelled: 'Paiement annulé',
+    manual_invoice: 'Facturation manuelle ajoutée'
   };
 
   function renderEmpHistoryPicker(){
@@ -4951,7 +5000,7 @@
       if(h.reason) extraHtml += `<div><span>Motif</span>${escapeHtml(h.reason)}</div>`;
       if(h.by) extraHtml += `<div><span>Par</span>${escapeHtml(h.by)}</div>`;
       return `
-        <div class="active-ad-card">
+        <div class="active-ad-card" data-history-id="${escapeHtml(h.id)}">
           <div class="active-ad-top">
             <span class="aacompany">${escapeHtml(label)}</span>
             <span class="hmeta" style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-faint);">${dateStr}</span>
@@ -4959,9 +5008,20 @@
           ${h.text ? `<div class="request-text">${escapeHtml(h.text)}</div>` : ''}
           ${extraHtml ? `<div class="request-details">${extraHtml}</div>` : ''}
           ${h.proof ? `<img src="${h.proof}" class="proof-thumb" style="max-width:160px; max-height:120px; border:1px solid var(--line); display:block; margin-top:8px;">` : ''}
+          <div class="request-actions" style="margin-top:10px;">
+            <button class="btn-refuse" data-action="delete-company-history" data-id="${escapeHtml(h.id)}">Supprimer</button>
+          </div>
         </div>
       `;
     }).join('');
+
+    container.querySelectorAll('button[data-action="delete-company-history"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        saveCompanyHistory(loadCompanyHistory().filter(h => h.id !== btn.dataset.id));
+        renderCompanyHistoryList();
+        showSavedIndicator();
+      });
+    });
   }
 
   function renderTaxHistory(){
