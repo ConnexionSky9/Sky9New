@@ -3297,6 +3297,36 @@
     saveEmpDiffusionHistory(list);
   }
 
+  // ---------- Nettoyage automatique des photos justificatives (après 1 semaine) ----------
+  // Le badge "Diffusée" et toutes les infos (qui, quand) restent pour toujours ;
+  // seule l'image en elle-même est retirée après 7 jours pour ne pas alourdir
+  // indéfiniment le stockage (localStorage + Firestore).
+  const PROOF_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+  function cleanupOldProofImages(){
+    const now = Date.now();
+
+    let changed = false;
+    const completedMap = loadCompleted();
+    Object.keys(completedMap).forEach(occId => {
+      const entry = completedMap[occId];
+      if(entry && entry.proof && entry.ts && (now - entry.ts > PROOF_MAX_AGE_MS)){
+        entry.proof = null;
+        changed = true;
+      }
+    });
+    if(changed) saveCompleted(completedMap);
+
+    changed = false;
+    const historyList = loadEmpDiffusionHistory();
+    historyList.forEach(h => {
+      if(h && h.proof && h.ts && (now - h.ts > PROOF_MAX_AGE_MS)){
+        h.proof = null;
+        changed = true;
+      }
+    });
+    if(changed) saveEmpDiffusionHistory(historyList);
+  }
+
   const LS_COMPANY_HISTORY_KEY = 'echonews_company_history';
   function loadCompanyHistory(){
     try{
@@ -5635,6 +5665,11 @@
   // navigateurs/contextes), on revérifie le solde à intervalle régulier.
   setInterval(refreshEntrepriseLiveData, 4000);
 
+  // Nettoyage des vieilles photos justificatives : une fois la synchro cloud faite
+  // (voir plus bas), puis toutes les heures tant que la page reste ouverte — pour
+  // ne jamais nettoyer avant d'avoir reçu les données à jour et écraser le résultat.
+  setInterval(cleanupOldProofImages, 60 * 60 * 1000);
+
   // ==================================================================
   // ========== SYNCHRONISATION AVEC UNE VRAIE BASE DE DONNÉES =========
   // ==================================================================
@@ -5749,6 +5784,7 @@
           });
           cloudApplyingRemote = false;
           cloudReady = true;
+          cleanupOldProofImages();
           refreshAllViewsFromCloud();
         }else{
           // Aucune donnée en ligne pour l'instant : on envoie l'état local actuel
