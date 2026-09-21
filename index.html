@@ -1071,6 +1071,12 @@
                 <div class="counter-row" id="counterRow">0 / 150</div>
               </div>
 
+              <div id="extraTexts"></div>
+              <div class="field">
+                <button type="button" class="ad-reset" id="addTextBtn">+ Ajouter un autre texte d'annonce (diffusé selon la fréquence choisie)</button>
+                <p class="recap-note" id="multiTextNote" style="display:none; margin-top:8px;">Plusieurs textes différents : chacun sera diffusé une fois, espacé du précédent selon la fréquence de diffusion choisie ci-dessus, à partir de l'heure de début. Le nombre d'annonces ci-dessous ne s'applique plus dans ce mode (calculé automatiquement).</p>
+              </div>
+
               <div class="field">
                 <label>Fréquence de diffusion</label>
                 <div class="freq-options" id="freqOptions">
@@ -1422,6 +1428,12 @@
               <label for="partAdText">Texte de l'annonce (150 caractères max, espaces et émojis compris)</label>
               <textarea id="partAdText" placeholder="Ex : 🎸 Concert privé ce samedi à Vinewood, entrée libre !"></textarea>
               <div class="counter-row" id="partCounterRow">0 / 150</div>
+            </div>
+
+            <div id="partExtraTexts"></div>
+            <div class="field">
+              <button type="button" class="ad-reset" id="partAddTextBtn">+ Ajouter un autre texte d'annonce (diffusé selon la fréquence choisie)</button>
+              <p class="recap-note" id="partMultiTextNote" style="display:none; margin-top:8px;">Plusieurs textes différents : chacun sera diffusé une fois, espacé du précédent selon la fréquence de diffusion choisie ci-dessus, à partir de l'heure de début. Le nombre d'annonces ci-dessous ne s'applique plus dans ce mode (calculé automatiquement).</p>
             </div>
 
             <div class="field">
@@ -2584,6 +2596,10 @@
     els.advancedSettings = document.getElementById(cfg.advancedSettingsId);
     els.dayOptions = document.getElementById(cfg.dayOptionsId);
     els.resetBtn = document.getElementById(cfg.resetBtnId);
+    els.extraTextsContainer = document.getElementById(cfg.extraTextsContainerId);
+    els.addTextBtn = document.getElementById(cfg.addTextBtnId);
+    els.multiTextNote = document.getElementById(cfg.multiTextNoteId);
+    let extraTextSeq = 0;
 
     let currentFreq = 'Toutes les heures';
     const DAY_LABELS = {0:'Dim', 1:'Lun', 2:'Mar', 3:'Mer', 4:'Jeu', 5:'Ven', 6:'Sam'};
@@ -2601,6 +2617,61 @@
     function updateHours(){
       els.recapHours.textContent = (els.timeStart.value || '12:00') + ' → ' + (els.timeEnd.value || '02:00');
     }
+
+    // ---------- Plusieurs textes d'annonce différents (espacés selon la fréquence choisie) ----------
+    function getExtraTextareas(){
+      return els.extraTextsContainer ? Array.from(els.extraTextsContainer.querySelectorAll('textarea')) : [];
+    }
+    function getAllTexts(){
+      const main = els.text.value.trim();
+      const extras = getExtraTextareas().map(t => t.value.trim()).filter(Boolean);
+      return main ? [main, ...extras] : extras;
+    }
+    function isMultiTextMode(){
+      return getExtraTextareas().length > 0;
+    }
+    function updateMultiTextUI(){
+      const multi = isMultiTextMode();
+      if(els.multiTextNote) els.multiTextNote.style.display = multi ? 'block' : 'none';
+      if(multi){
+        els.adCount.value = getAllTexts().length || 1;
+        els.adCount.disabled = true;
+      }else{
+        els.adCount.disabled = false;
+      }
+      updateTotal();
+    }
+    function addExtraTextField(){
+      if(!els.extraTextsContainer) return;
+      extraTextSeq += 1;
+      const wrap = document.createElement('div');
+      wrap.className = 'field extra-text-field';
+      wrap.innerHTML = `
+        <label>Texte d'annonce supplémentaire (diffusé selon la fréquence choisie après le précédent)</label>
+        <textarea maxlength="150"></textarea>
+        <div class="counter-row">0 / 150</div>
+        <button type="button" class="ad-reset extra-text-remove">Retirer ce texte</button>
+      `;
+      els.extraTextsContainer.appendChild(wrap);
+      const ta = wrap.querySelector('textarea');
+      const counterEl = wrap.querySelector('.counter-row');
+      ta.addEventListener('input', () => {
+        let arr = Array.from(ta.value);
+        if(arr.length > 150){ arr = arr.slice(0, 150); ta.value = arr.join(''); }
+        counterEl.textContent = arr.length + ' / 150';
+        counterEl.classList.toggle('limit', arr.length >= 150);
+        updateMultiTextUI();
+      });
+      wrap.querySelector('.extra-text-remove').addEventListener('click', () => {
+        wrap.remove();
+        updateMultiTextUI();
+      });
+      updateMultiTextUI();
+      ta.focus();
+    }
+    if(els.addTextBtn){
+      els.addTextBtn.addEventListener('click', addExtraTextField);
+    }
     function getSelectedDays(){
       if(!els.dayOptions) return [0,1,2,3,4,5,6];
       const selected = Array.from(els.dayOptions.querySelectorAll('.freq-chip.selected')).map(c => parseInt(c.dataset.day, 10));
@@ -2613,8 +2684,13 @@
       recapDays.textContent = selected.length === 7 ? 'Tous les jours' : selected.sort().map(d => DAY_LABELS[d]).join(', ');
     }
     function updateTotal(){
-      let count = parseInt(els.adCount.value, 10);
-      if(isNaN(count) || count < 1){ count = 1; }
+      let count;
+      if(isMultiTextMode()){
+        count = getAllTexts().length || 1;
+      }else{
+        count = parseInt(els.adCount.value, 10);
+        if(isNaN(count) || count < 1){ count = 1; }
+      }
       const unitPrice = session ? getUnitPriceForCompany(session.name) : UNIT_PRICE;
       els.recapCount.textContent = count;
       const unitEl = document.getElementById(cfg.recapUnitPriceId);
@@ -2639,7 +2715,7 @@
       }
     }
 
-    els.text.addEventListener('input', updateCounter);
+    els.text.addEventListener('input', () => { updateCounter(); if(isMultiTextMode()) updateMultiTextUI(); });
     els.dateStart.addEventListener('change', updatePeriod);
     els.dateEnd.addEventListener('change', updatePeriod);
     els.timeStart.addEventListener('change', updateHours);
@@ -2674,6 +2750,9 @@
       els.timeStart.value = '12:00';
       els.timeEnd.value = '02:00';
       els.adCount.value = 1;
+      els.adCount.disabled = false;
+      if(els.extraTextsContainer) els.extraTextsContainer.innerHTML = '';
+      if(els.multiTextNote) els.multiTextNote.style.display = 'none';
       currentFreq = 'Toutes les heures';
       els.freqOptions.querySelectorAll('.freq-chip').forEach(c => {
         c.classList.toggle('selected', c.dataset.freq === currentFreq);
@@ -2697,10 +2776,16 @@
     }
 
     els.submitBtn.addEventListener('click', () => {
-      const text = els.text.value.trim();
-      if(!text){ els.text.focus(); return; }
-      let count = parseInt(els.adCount.value, 10);
-      if(isNaN(count) || count < 1){ count = 1; }
+      const texts = getAllTexts();
+      if(texts.length === 0){ els.text.focus(); return; }
+      const isMulti = texts.length > 1;
+      let count;
+      if(isMulti){
+        count = texts.length;
+      }else{
+        count = parseInt(els.adCount.value, 10);
+        if(isNaN(count) || count < 1){ count = 1; }
+      }
 
       if(cfg.balanceMode){
         const balance = session ? getBalance(session.name) : 0;
@@ -2716,10 +2801,11 @@
       }
 
       const unitPrice = session ? getUnitPriceForCompany(session.name) : UNIT_PRICE;
+      const displayText = isMulti ? texts.map((t, i) => `${i+1}) ${t}`).join('  •  ') : texts[0];
       const req = {
         id: 'req_' + Date.now(),
         company: session ? session.name : 'Inconnu',
-        text: text,
+        text: displayText,
         freq: currentFreq,
         dateStart: els.dateStart.value || '—',
         dateEnd: els.dateEnd.value || '—',
@@ -2732,6 +2818,7 @@
         hiddenFromPlanning: false,
         submittedAt: new Date().toLocaleString('fr-FR')
       };
+      if(isMulti) req.texts = texts;
       const list = loadRequests();
       list.unshift(req);
       saveRequests(list);
@@ -2793,7 +2880,8 @@
     recapTotalId: 'recapTotal', submitBtnId: 'submitBtn', adConfirmId: 'adConfirm', recapLenId: 'recapLen',
     toggleAdvancedBtnId: 'toggleAdvancedBtn', advancedSettingsId: 'advancedSettings', dayOptionsId: 'dayOptions',
     recapDaysId: 'recapDays', recapUnitPriceId: 'recapUnitPrice', panelUnitPriceId: 'panelUnitPrice',
-    resetBtnId: 'resetAdFormBtn', myRequestsId: 'myRequests', balanceMode: true, balanceWarningId: 'recapBalanceWarning'
+    resetBtnId: 'resetAdFormBtn', myRequestsId: 'myRequests', balanceMode: true, balanceWarningId: 'recapBalanceWarning',
+    extraTextsContainerId: 'extraTexts', addTextBtnId: 'addTextBtn', multiTextNoteId: 'multiTextNote'
   });
 
   const particulierAdForm = setupAdForm({
@@ -2803,7 +2891,8 @@
     recapTotalId: 'partRecapTotal', submitBtnId: 'partSubmitBtn', adConfirmId: 'partAdConfirm', recapLenId: 'partRecapLen',
     toggleAdvancedBtnId: 'partToggleAdvancedBtn', advancedSettingsId: 'partAdvancedSettings', dayOptionsId: 'partDayOptions',
     recapDaysId: 'partRecapDays', recapUnitPriceId: 'partRecapUnitPrice', panelUnitPriceId: null,
-    resetBtnId: 'partResetAdFormBtn', myRequestsId: 'myPartAdRequests'
+    resetBtnId: 'partResetAdFormBtn', myRequestsId: 'myPartAdRequests',
+    extraTextsContainerId: 'partExtraTexts', addTextBtnId: 'partAddTextBtn', multiTextNoteId: 'partMultiTextNote'
   });
 
   /* ---------- Demande de rechargement ---------- */
@@ -3308,7 +3397,33 @@
   // Construit, pour une annonce acceptée, la liste de ses diffusions (date + heure)
   // en respectant : la plage horaire demandée, la fréquence, et le nombre total payé,
   // réparties jour après jour sur la période demandée (donc sur la semaine si besoin).
+  // Cas particulier : plusieurs textes d'annonce différents dans une même demande.
+  // Chaque texte est diffusé une seule fois, espacé du précédent selon la fréquence
+  // de diffusion choisie dans le formulaire (jours ignorés dans ce mode).
+  function generateMultiTextSchedule(ad){
+    const startM = toMinutes(ad.timeStart || '12:00');
+    const today = new Date(); today.setHours(0,0,0,0);
+    let baseDate = (ad.dateStart && ad.dateStart !== '—') ? new Date(ad.dateStart + 'T00:00:00') : new Date(today);
+    if(baseDate < today) baseDate = new Date(today);
+    const GAP = FREQ_MINUTES[ad.freq] || 60; // écart entre chaque texte différent, selon la fréquence choisie
+    return ad.texts.map((txt, i) => {
+      const totalM = startM + i * GAP;
+      const dayOffset = Math.floor(totalM / 1440);
+      const d = new Date(baseDate.getTime() + dayOffset * 86400000);
+      return {
+        id: ad.id + '_' + i,
+        date: toISODate(d),
+        time: minutesToLabel(totalM),
+        sortMinutes: ((totalM % 1440) + 1440) % 1440,
+        ad: Object.assign({}, ad, { text: txt })
+      };
+    });
+  }
+
   function generateSchedule(ad){
+    if(ad.texts && ad.texts.length > 1){
+      return generateMultiTextSchedule(ad);
+    }
     const step = FREQ_MINUTES[ad.freq] || 60;
     const startM = toMinutes(ad.timeStart || '12:00');
     const endM = toMinutes(ad.timeEnd || '02:00');
