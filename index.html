@@ -631,6 +631,13 @@
   .service-chip.type-interview{ background: #ffd0cc; color: #7a1f16; border-color: #e0685c; }
   .schedule-empty{ font-size: 12.5px; color: var(--text-faint); }
   .schedule-check{ display:inline-flex; align-items:center; gap:8px; cursor:pointer; }
+  .copy-ad-btn{
+    display:inline-flex; align-items:center; gap:4px; margin-left:8px;
+    font-family:'IBM Plex Mono', monospace; font-size:11px; background:transparent;
+    border: 1px solid var(--line); color: var(--text-dim); padding: 4px 8px; border-radius:2px; cursor:pointer;
+  }
+  .copy-ad-btn:hover{ border-color: var(--gold); color: var(--gold); }
+  .copy-ad-btn.copied{ border-color: var(--gold); color: var(--gold); }
   .schedule-check input[type="checkbox"]{ width:15px; height:15px; accent-color: var(--gold); cursor:pointer; }
 
   .active-ad-card{
@@ -3613,6 +3620,7 @@
             <input type="checkbox" data-occ="${o.id}" data-company="${escapeHtml(o.ad.company)}" data-text="${escapeHtml(o.ad.text)}" data-date="${o.date}" data-time="${o.time}" ${isDone ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
             <span class="schedule-chip"><b>${escapeHtml(o.ad.company)}</b> — ${escapeHtml(o.ad.text)}</span>
           </label>
+          <button type="button" class="copy-ad-btn" data-copy-text="${escapeHtml(o.ad.text)}" title="Copier le texte de l'annonce">📋 Copier</button>
           ${isDone ? `<span class="badge accepted" style="margin-left:8px;">Diffusée par ${escapeHtml(completedMap[o.id].by)}</span>` : ''}
           ${noteHtml}
           ${proofHtml}
@@ -3629,6 +3637,41 @@
       cb.addEventListener('change', () => {
         if(cb.disabled){ return; }
         toggleCompleted(cb.dataset.occ, cb.checked, cb.dataset.company, cb.dataset.text, cb.dataset.date, cb.dataset.time);
+      });
+    });
+
+    container.querySelectorAll('.copy-ad-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const text = btn.dataset.copyText || '';
+        const markCopied = () => {
+          const original = btn.textContent;
+          btn.textContent = '✓ Copié';
+          btn.classList.add('copied');
+          setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1500);
+        };
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          navigator.clipboard.writeText(text).then(markCopied).catch(() => {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            try{ document.execCommand('copy'); }catch(e){}
+            document.body.removeChild(ta);
+            markCopied();
+          });
+        }else{
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          try{ document.execCommand('copy'); }catch(e){}
+          document.body.removeChild(ta);
+          markCopied();
+        }
       });
     });
 
