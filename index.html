@@ -1841,6 +1841,24 @@
         </div>
 
         <div class="requests-block">
+          <h2>Créditer une entreprise</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Ajoute manuellement des annonces au solde d'une entreprise, sans passer par une demande de rechargement.</p>
+          <div class="field-pair" style="margin-bottom:14px;">
+            <div class="field">
+              <label for="creditCompanyPicker">Entreprise</label>
+              <select id="creditCompanyPicker"></select>
+            </div>
+            <div class="field">
+              <label for="creditAmountInput">Nombre d'annonces à ajouter</label>
+              <input type="number" id="creditAmountInput" min="1" step="1" placeholder="Ex : 10">
+            </div>
+          </div>
+          <p style="font-size:13px; color:var(--text-dim); margin:0 0 14px;">Solde actuel : <b id="creditCompanyBalance" style="color:var(--gold);">0</b> annonce(s)</p>
+          <button class="ad-submit" id="creditCompanyBtn" style="margin-bottom:10px;">Ajouter au solde</button>
+          <div id="creditCompanyResult"></div>
+        </div>
+
+        <div class="requests-block">
           <h2>Réinitialisations</h2>
           <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Ces actions sont irréversibles et demandent une confirmation.</p>
 
@@ -2466,7 +2484,7 @@
         if(btn.dataset.subtarget === 'dirActive') renderActiveAds();
         if(btn.dataset.subtarget === 'dirSpecial') renderSpecialRequests();
         if(btn.dataset.subtarget === 'dirSpecialActive') renderSpecialActive();
-        if(btn.dataset.subtarget === 'dirSettings'){ renderGradesManagement(); renderGradePermissionsTable(); renderIdentifiants(); renderPricingPicker(); }
+        if(btn.dataset.subtarget === 'dirSettings'){ renderGradesManagement(); renderGradePermissionsTable(); renderIdentifiants(); renderPricingPicker(); renderCreditCompanyPicker(); }
         if(btn.dataset.subtarget === 'dirSalary') renderSalary();
         if(btn.dataset.subtarget === 'dirOverview'){ renderOverviewStats(); renderCompanySummary(); renderLogs(); }
         if(btn.dataset.subtarget === 'dirTax') renderTax();
@@ -4232,6 +4250,50 @@
     });
   }
 
+  /* ---------- Créditer une entreprise manuellement ---------- */
+  function renderCreditCompanyBalance(){
+    const picker = document.getElementById('creditCompanyPicker');
+    const balanceEl = document.getElementById('creditCompanyBalance');
+    if(!picker || !balanceEl) return;
+    balanceEl.textContent = picker.value ? getBalance(picker.value) : 0;
+  }
+
+  function renderCreditCompanyPicker(){
+    const picker = document.getElementById('creditCompanyPicker');
+    if(!picker) return;
+    if(!picker.dataset.filled){
+      picker.innerHTML = COMPANY_ACCOUNTS.map(acc => `<option value="${escapeHtml(acc.display)}">${escapeHtml(acc.display)}</option>`).join('');
+      picker.dataset.filled = '1';
+      picker.addEventListener('change', renderCreditCompanyBalance);
+    }
+    renderCreditCompanyBalance();
+  }
+
+  const creditCompanyBtn = document.getElementById('creditCompanyBtn');
+  if(creditCompanyBtn){
+    creditCompanyBtn.addEventListener('click', () => {
+      const picker = document.getElementById('creditCompanyPicker');
+      const input = document.getElementById('creditAmountInput');
+      const resultEl = document.getElementById('creditCompanyResult');
+      const company = picker ? picker.value : '';
+      let amount = parseInt(input.value, 10);
+      if(!company || isNaN(amount) || amount < 1){
+        if(resultEl){
+          resultEl.innerHTML = '<p style="color:var(--red); font-size:13px; margin-top:6px;">Choisis une entreprise et un nombre d\'annonces valide (au moins 1).</p>';
+        }
+        return;
+      }
+      adjustBalance(company, amount);
+      addLog(`<b>${escapeHtml(amount)}</b> annonce(s) ajoutée(s) manuellement au solde de <b>${escapeHtml(company)}</b>.`);
+      if(input) input.value = '';
+      renderCreditCompanyBalance();
+      showSavedIndicator();
+      if(resultEl){
+        resultEl.innerHTML = `<p style="color:var(--gold); font-size:13px; margin-top:6px;">✓ ${escapeHtml(amount)} annonce(s) ajoutée(s) à ${escapeHtml(company)}. Nouveau solde : ${getBalance(company)}.</p>`;
+      }
+    });
+  }
+
   const savePricingBtn = document.getElementById('savePricingBtn');
   if(savePricingBtn){
     savePricingBtn.addEventListener('click', () => {
@@ -5093,7 +5155,7 @@
           'renderGradesManagement', 'renderGradePermissionsTable', 'renderIdentifiants',
           'renderEmpIdentifiantsList', 'renderSalary', 'renderBroadcastPlanning',
           'renderMyRequests', 'renderMyRechargeRequests', 'renderCompanyProfile',
-          'renderPricingPicker', 'applySession'
+          'renderPricingPicker', 'renderCreditCompanyPicker', 'applySession'
         ];
         fns.forEach(name => {
           try{ if(typeof window[name] === 'function') window[name](); }catch(e){}
