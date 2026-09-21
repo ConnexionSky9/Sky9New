@@ -671,6 +671,19 @@
     border: 1px solid var(--line); background: var(--bg-raised);
     padding: 12px 16px; margin-bottom: 10px; flex-wrap:wrap;
   }
+  .save-status-bar{
+    position: sticky; top: 0; z-index: 5;
+    display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+    background: var(--bg-raised); border: 1px solid var(--line); border-radius:2px;
+    padding: 12px 16px; margin-bottom:18px;
+    font-family:'IBM Plex Sans', sans-serif; font-size:13px; color: var(--text-dim);
+  }
+  .save-status-bar.is-saved{ border-color: var(--gold); color: var(--gold); }
+  .save-status-bar button{
+    font-family:'Oswald', sans-serif; font-weight:600; font-size:12.5px; letter-spacing:.02em;
+    background: var(--gold); color: #1a1204; border:none; padding: 9px 16px; border-radius:2px; cursor:pointer;
+  }
+  .save-status-bar button:hover{ filter:brightness(1.08); }
   .emp-row .ename{ font-family:'Oswald', sans-serif; font-weight:600; font-size:14.5px; }
   .emp-row select{
     background: var(--bg-card); border: 1px solid var(--line); color: var(--text);
@@ -1734,6 +1747,10 @@
       </div>
 
       <div class="subpanel" id="dirSettings">
+        <div class="save-status-bar">
+          <span id="saveStatusText">Toutes les modifications sont enregistrées automatiquement.</span>
+          <button type="button" id="saveAllSettingsBtn">💾 Enregistrer les modifications</button>
+        </div>
         <div class="requests-block">
           <h2>Grades de rémunération</h2>
           <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Crée les grades de ton choix, chacun avec son propre prix par annonce diffusée.</p>
@@ -1870,6 +1887,8 @@
   <footer>SKY9 — Document interne, usage restreint aux membres autorisés</footer>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 <script>
   /* ---------- Intro : le logo explose pour révéler la connexion ---------- */
   (function(){
@@ -2209,6 +2228,28 @@
   }
   function saveEmployeeAccounts(list){
     try{ localStorage.setItem(LS_EMPLOYEE_ACCOUNTS_KEY, JSON.stringify(list)); }catch(e){}
+  }
+
+  // ---------- Confirmation visuelle d'enregistrement ----------
+  // Tout, dans le Paramétrage Direction, s'enregistre déjà instantanément dans le
+  // navigateur (localStorage) dès qu'un changement est fait. Cette fonction affiche
+  // une confirmation visuelle claire ("✓ Enregistré") pour rassurer la direction.
+  let saveIndicatorTimeout = null;
+  function showSavedIndicator(){
+    const bar = document.querySelector('.save-status-bar');
+    const text = document.getElementById('saveStatusText');
+    if(!bar || !text) return;
+    bar.classList.add('is-saved');
+    text.textContent = '✓ Modifications enregistrées.';
+    if(saveIndicatorTimeout) clearTimeout(saveIndicatorTimeout);
+    saveIndicatorTimeout = setTimeout(() => {
+      bar.classList.remove('is-saved');
+      text.textContent = 'Toutes les modifications sont enregistrées automatiquement.';
+    }, 2200);
+  }
+  const saveAllSettingsBtn = document.getElementById('saveAllSettingsBtn');
+  if(saveAllSettingsBtn){
+    saveAllSettingsBtn.addEventListener('click', showSavedIndicator);
   }
 
   // Le grade "Direction" donne un accès complet (comme un compte Direction classique).
@@ -3838,6 +3879,7 @@
       </div>
     `;
     afterFns.forEach(fn => fn());
+    showSavedIndicator();
   }
 
   const createEmpAccountBtn = document.getElementById('createEmpAccountBtn');
@@ -4043,6 +4085,7 @@
             addLog(`Mot de passe changé pour le compte Direction <b>${escapeHtml(account.display)}</b>.`);
           }
           renderIdDirectionList();
+          showSavedIndicator();
         });
       });
     });
@@ -4284,6 +4327,7 @@
         if(!all[gradeId]) all[gradeId] = {};
         all[gradeId][cb.dataset.perm] = cb.checked;
         saveGradePermissions(all);
+        showSavedIndicator();
       });
     });
   }
@@ -4319,6 +4363,7 @@
           grade.price = price;
           saveGrades(list);
           renderSalary();
+          showSavedIndicator();
         }
       };
       input.addEventListener('change', commit);
@@ -4338,6 +4383,7 @@
         renderGradesManagement();
         renderGradePermissionsTable();
         renderSalary();
+        showSavedIndicator();
       });
     });
 
@@ -4360,6 +4406,7 @@
         else{ delete map[sel.dataset.emp]; }
         saveEmployeeGrades(map);
         renderSalary();
+        showSavedIndicator();
       });
     });
   }
@@ -4379,6 +4426,7 @@
       gradePriceInput.value = '';
       renderGradesManagement();
       renderGradePermissionsTable();
+      showSavedIndicator();
     });
   }
 
@@ -4950,6 +4998,137 @@
   // Filet de sécurité : si l'événement "storage" n'est pas déclenché (certains
   // navigateurs/contextes), on revérifie le solde à intervalle régulier.
   setInterval(refreshEntrepriseLiveData, 4000);
+
+  // ==================================================================
+  // ========== SYNCHRONISATION AVEC UNE VRAIE BASE DE DONNÉES =========
+  // ==================================================================
+  // Toutes les données de l'app (grades, employés, demandes, soldes, planning,
+  // historiques...) sont normalement stockées uniquement dans le navigateur
+  // (localStorage), ce qui ne se partage pas entre appareils/navigateurs.
+  // Ce bloc les synchronise en plus avec Firestore (base de données de Google
+  // Firebase, gratuite), pour qu'elles soient identiques et à jour partout,
+  // en temps réel, sur GitHub Pages.
+  //
+  // ===> ÉTAPES À FAIRE UNE SEULE FOIS (5 minutes, gratuit) :
+  // 1. Va sur https://console.firebase.google.com et crée un projet (gratuit).
+  // 2. Dans le projet : menu "Build" > "Firestore Database" > "Créer une base
+  //    de données" (choisis le mode "production", n'importe quelle région).
+  // 3. Dans "Règles" de Firestore, remplace le contenu par :
+  //      rules_version = '2';
+  //      service cloud.firestore {
+  //        match /databases/{database}/documents {
+  //          match /echonews/state {
+  //            allow read, write: if true;
+  //          }
+  //        }
+  //      }
+  //    (Ouvert en lecture/écriture pour simplifier : n'importe qui connaissant
+  //    le lien de ton site peut lire/modifier les données. Si tu veux plus de
+  //    sécurité, il faudra ajouter l'authentification Firebase — dis-le-moi.)
+  // 4. Dans les paramètres du projet (roue crantée) > "Vos applications" >
+  //    ajoute une "application Web" (</>) > copie l'objet "firebaseConfig"
+  //    qui s'affiche, et colle-le ci-dessous à la place de celui d'exemple.
+  // 5. Enregistre ce fichier et republie-le sur GitHub. C'est tout : toutes
+  //    les données seront désormais partagées et à jour en temps réel entre
+  //    tous les navigateurs/appareils qui ouvrent le site.
+  const firebaseConfig = {
+    apiKey: "AIzaSyD6HPxqyzIUF5cWajK97o5zF9tkesEc3AE",
+    authDomain: "sky9-da71e.firebaseapp.com",
+    projectId: "sky9-da71e",
+    storageBucket: "sky9-da71e.firebasestorage.app",
+    messagingSenderId: "758560371315",
+    appId: "1:758560371315:web:7c9ebf1f3246ec755b3006"
+  };
+
+  // Toutes les clés de stockage utilisées par l'application, synchronisées avec le cloud.
+  const CLOUD_SYNCED_KEYS = [
+    'echonews_ad_requests', 'echonews_employee_accounts', 'echonews_direction_grade_removed',
+    'echonews_service_requests', 'echonews_employee_diffusion_history', 'echonews_company_history',
+    'echonews_tax_history', 'echonews_logs', 'echonews_completed_ads', 'echonews_duty_status',
+    'echonews_duty_totals', 'echonews_grades', 'echonews_employee_grades', 'echonews_week_reset_marker',
+    'echonews_company_prices', 'echonews_company_balances', 'echonews_grade_permissions',
+    'echonews_week_expenses', 'echonews_revenue_reset_marker'
+  ];
+
+  let cloudDb = null;
+  let cloudDocRef = null;
+  let cloudApplyingRemote = false;
+  let cloudPushTimer = null;
+  let cloudReady = false;
+
+  function cloudLog(...args){ console.log('[EchoNews Cloud]', ...args); }
+
+  if(firebaseConfig.apiKey && firebaseConfig.apiKey !== 'COLLE_TA_CLE_API_ICI' && typeof firebase !== 'undefined'){
+    try{
+      firebase.initializeApp(firebaseConfig);
+      cloudDb = firebase.firestore();
+      cloudDocRef = cloudDb.collection('echonews').doc('state');
+
+      // On intercepte localStorage.setItem : chaque écriture locale déclenche
+      // (avec un léger délai anti-rafale) un envoi vers Firestore.
+      const _origSetItem = localStorage.setItem.bind(localStorage);
+      localStorage.setItem = function(key, value){
+        _origSetItem(key, value);
+        if(cloudReady && !cloudApplyingRemote && CLOUD_SYNCED_KEYS.includes(key)){
+          clearTimeout(cloudPushTimer);
+          cloudPushTimer = setTimeout(pushStateToCloud, 700);
+        }
+      };
+
+      function pushStateToCloud(){
+        if(!cloudDocRef) return;
+        const payload = {};
+        CLOUD_SYNCED_KEYS.forEach(k => {
+          const v = localStorage.getItem(k);
+          if(v !== null) payload[k] = v;
+        });
+        payload._updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+        cloudDocRef.set(payload, { merge: true }).catch(err => cloudLog('Erreur d\'enregistrement :', err));
+      }
+
+      // Rafraîchit toutes les vues actuellement visibles après une mise à jour
+      // reçue depuis le cloud (un autre appareil/navigateur a changé une donnée).
+      function refreshAllViewsFromCloud(){
+        const fns = [
+          'renderGradesManagement', 'renderGradePermissionsTable', 'renderIdentifiants',
+          'renderEmpIdentifiantsList', 'renderSalary', 'renderBroadcastPlanning',
+          'renderMyRequests', 'renderMyRechargeRequests', 'renderCompanyProfile',
+          'renderPricingPicker', 'applySession'
+        ];
+        fns.forEach(name => {
+          try{ if(typeof window[name] === 'function') window[name](); }catch(e){}
+        });
+      }
+
+      cloudDocRef.onSnapshot((snap) => {
+        if(snap.exists){
+          const data = snap.data();
+          cloudApplyingRemote = true;
+          CLOUD_SYNCED_KEYS.forEach(k => {
+            if(Object.prototype.hasOwnProperty.call(data, k)){
+              _origSetItem(k, data[k]);
+            }
+          });
+          cloudApplyingRemote = false;
+          cloudReady = true;
+          refreshAllViewsFromCloud();
+        }else{
+          // Aucune donnée en ligne pour l'instant : on envoie l'état local actuel
+          // pour amorcer la base (par exemple, tout premier lancement).
+          cloudReady = true;
+          pushStateToCloud();
+        }
+      }, (err) => {
+        cloudLog('Erreur de synchronisation (vérifie ta config Firebase et tes règles Firestore) :', err);
+      });
+
+      cloudLog('Connexion à Firestore initialisée.');
+    }catch(e){
+      cloudLog('Impossible d\'initialiser Firebase — vérifie firebaseConfig.', e);
+    }
+  }else{
+    cloudLog('firebaseConfig non renseigné : les données restent uniquement locales à ce navigateur (voir instructions dans le code).');
+  }
 </script>
 
 </body>
