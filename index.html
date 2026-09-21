@@ -291,6 +291,30 @@
     .clearance b{ display:none; }
     .brand .name{ font-size:14px; }
     nav.tabs button{ padding: 8px 10px; font-size:13px; }
+    /* Barre d'onglets glissable horizontalement uniquement sur petits écrans. */
+    nav.tabs{ min-width:0; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+    nav.tabs::-webkit-scrollbar{ display:none; }
+    nav.tabs button{ flex-shrink:0; white-space:nowrap; }
+    .brand{ flex-shrink:0; }
+    .clearance{ flex-shrink:0; }
+    .subtabs{ overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+    .subtabs::-webkit-scrollbar{ display:none; }
+    .subtabs .subtab{ flex-shrink:0; white-space:nowrap; }
+    .request-actions{ flex-wrap:wrap; }
+    #gradePermissionsTable{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    .perm-table{ min-width:640px; }
+  }
+  @media (max-width: 480px){
+    .topbar{ padding: 10px 12px; gap: 10px; }
+    .brand{ padding-right: 10px; gap:6px; }
+    .brand .name small{ display:none; }
+    nav.tabs button{ padding: 7px 9px; font-size:12.5px; }
+    .logout-btn{ padding: 6px 8px; font-size:10px; }
+  }
+  /* Empêche le zoom automatique de Safari iOS quand on touche un champ
+     (qui se déclenche dès que le texte affiché fait moins de 16px). */
+  @media (max-width: 600px){
+    input, select, textarea{ font-size:16px !important; }
   }
 
   main{ max-width: 1180px; margin: 0 auto; padding: 32px 24px 64px; }
@@ -572,11 +596,32 @@
   .kpi .value{ font-family:'Oswald', sans-serif; font-size: 27px; font-weight:600; margin-top: 6px; color: var(--gold); }
   .kpi .sub{ font-size:11.5px; color: var(--text-dim); margin-top:4px; }
   @media (max-width: 760px){ .kpi-row{ grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 420px){
+    .kpi-row{ grid-template-columns: 1fr; }
+    .kpi{ padding: 14px 16px; }
+    .kpi .value{ font-size: 22px; }
+  }
 
   .requests-block{
     background: var(--bg-card); border: 1px solid var(--line); padding: 20px; margin-bottom: 24px;
   }
-  .subtabs{ display:flex; gap: 6px; margin-bottom: 22px; border-bottom: 1px solid var(--line); }
+  .dir-categories{
+    display:flex; gap: 8px; margin-bottom: 18px; flex-wrap:wrap;
+  }
+  .dir-categories .dir-cat{
+    appearance:none; border: 1px solid var(--line); background: var(--bg-card);
+    color: var(--text-dim); font-family:'Oswald', sans-serif; font-weight:600;
+    font-size: 13px; letter-spacing:0.2px; padding: 10px 18px; cursor:pointer; border-radius: 2px;
+    transition: background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .dir-categories .dir-cat:hover{ border-color: var(--gold); color: var(--text); }
+  .dir-categories .dir-cat.active{ background: var(--gold); color: var(--bg); border-color: var(--gold); }
+  .dir-categories .dir-cat.hidden-tab{ display:none; }
+
+  .subtabs{
+    display:flex; gap: 6px; margin-bottom: 22px; border-bottom: 1px solid var(--line);
+  }
+  .subtabs .subtab.cat-hidden{ display:none; }
   .subtabs .subtab{
     appearance:none; border:none; background:transparent;
     color: var(--text-dim); font-family:'IBM Plex Sans', sans-serif; font-weight:500;
@@ -1082,7 +1127,7 @@
       </nav>
 
       <div class="subpanel" id="entPlanning">
-        <p style="font-size:13px; color:var(--text-dim); margin:0 0 16px;">Le planning de diffusion de vos annonces uniquement — vous ne voyez pas celui des autres entreprises. Vous pouvez modifier le texte d'une annonce tant que son heure de diffusion n'est pas encore passée.</p>
+        <p style="font-size:13px; color:var(--text-dim); margin:0 0 16px;">Le planning de diffusion de vos annonces uniquement — vous ne voyez pas celui des autres entreprises. Vous pouvez modifier le texte d'une annonce jusqu'à 5 minutes avant sa diffusion ; passé ce délai, elle est verrouillée.</p>
         <div class="planning-nav">
           <button id="entPlanningPrevBtn" type="button">◀ Jour précédent</button>
           <button id="entPlanningTodayBtn" type="button">Aujourd'hui</button>
@@ -1667,18 +1712,27 @@
         <div class="panel-meta">Confidentiel<br>Accès restreint</div>
       </div>
 
+      <nav class="dir-categories" role="tablist" aria-label="Catégories direction">
+        <button class="dir-cat active" data-cat="overview">Vue d'ensemble</button>
+        <button class="dir-cat" data-cat="ads">Annonces</button>
+        <button class="dir-cat" data-cat="companies">Entreprises</button>
+        <button class="dir-cat" data-cat="employees">Employés</button>
+        <button class="dir-cat" data-cat="finances">Finances</button>
+        <button class="dir-cat" data-cat="settings">Paramétrage</button>
+      </nav>
+
       <nav class="subtabs" role="tablist" aria-label="Sections direction">
-        <button class="subtab active" role="tab" data-subtarget="dirOverview">Vue d'ensemble</button>
-        <button class="subtab" role="tab" data-subtarget="dirRequests">Demande d'annonce</button>
-        <button class="subtab" role="tab" data-subtarget="dirActive">Annonces actives</button>
-        <button class="subtab" role="tab" data-subtarget="dirSpecial">Demandes spéciales</button>
-        <button class="subtab" role="tab" data-subtarget="dirSpecialActive">Demandes spéciales actives</button>
-        <button class="subtab" role="tab" data-subtarget="dirSalary">Salaire</button>
-        <button class="subtab" role="tab" data-subtarget="dirTax">Impôt</button>
-        <button class="subtab" role="tab" data-subtarget="dirDebts">Facturation</button>
-        <button class="subtab" role="tab" data-subtarget="dirEmpHistory">Historique employés</button>
-        <button class="subtab" role="tab" data-subtarget="dirCompanyHistory">Historique entreprises</button>
-        <button class="subtab" role="tab" data-subtarget="dirSettings">Paramétrage</button>
+        <button class="subtab active" role="tab" data-subtarget="dirOverview" data-cat="overview">Vue d'ensemble</button>
+        <button class="subtab" role="tab" data-subtarget="dirRequests" data-cat="ads">Demandes d'annonce</button>
+        <button class="subtab" role="tab" data-subtarget="dirActive" data-cat="ads">Annonces actives</button>
+        <button class="subtab" role="tab" data-subtarget="dirSpecial" data-cat="ads">Demandes spéciales</button>
+        <button class="subtab" role="tab" data-subtarget="dirSpecialActive" data-cat="ads">Demandes spéciales actives</button>
+        <button class="subtab" role="tab" data-subtarget="dirCompanyHistory" data-cat="companies">Historique entreprises</button>
+        <button class="subtab" role="tab" data-subtarget="dirSalary" data-cat="employees">Salaire</button>
+        <button class="subtab" role="tab" data-subtarget="dirEmpHistory" data-cat="employees">Historique employés</button>
+        <button class="subtab" role="tab" data-subtarget="dirDebts" data-cat="finances">Facturation</button>
+        <button class="subtab" role="tab" data-subtarget="dirTax" data-cat="finances">Impôt</button>
+        <button class="subtab" role="tab" data-subtarget="dirSettings" data-cat="settings">Paramétrage</button>
       </nav>
 
       <div class="subpanel active" id="dirOverview">
@@ -1776,8 +1830,29 @@
       <div class="subpanel" id="dirSalary">
         <div class="requests-block">
           <h2>Salaire</h2>
-          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Le montant ajouté à chaque annonce diffusée dépend du grade de l'employé (voir Paramétrage).</p>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Le montant ajouté à chaque annonce diffusée dépend du grade de l'employé (voir Paramétrage). Ce total est permanent : il ne bouge pas si le planning change, jusqu'à ce que tu le vides ci-dessous.</p>
           <div id="dirSalaryList"><p class="requests-empty">Aucune diffusion cochée pour le moment.</p></div>
+        </div>
+
+        <div class="requests-block">
+          <h2>Corriger un salaire manuellement</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Ajoute (montant positif) ou retire (montant négatif) une somme du salaire d'un employé, avec un motif.</p>
+          <div class="field-pair" style="margin-bottom:14px;">
+            <div class="field">
+              <label for="salaryCorrectionEmployeePicker">Employé</label>
+              <select id="salaryCorrectionEmployeePicker"></select>
+            </div>
+            <div class="field">
+              <label for="salaryCorrectionAmount">Montant ($, +/-)</label>
+              <input type="number" id="salaryCorrectionAmount" step="500" placeholder="Ex : 2000 ou -2000">
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:14px;">
+            <label for="salaryCorrectionReason">Motif</label>
+            <input type="text" id="salaryCorrectionReason" placeholder="Ex : Annonce diffusée oubliée / erreur de pointage">
+          </div>
+          <button class="ad-submit" id="salaryCorrectionBtn">Ajouter la correction</button>
+          <div id="salaryCorrectionResult"></div>
         </div>
       </div>
 
@@ -2534,6 +2609,7 @@
       tabEmployes.classList.remove('hidden-tab');
       tabDirection.classList.remove('hidden-tab');
       document.querySelectorAll('#direction .subtabs .subtab').forEach(b => b.classList.remove('hidden-tab'));
+      document.querySelectorAll('.dir-categories .dir-cat').forEach(b => b.classList.remove('hidden-tab'));
       sessionLabel.textContent = session.name + ' (direction)';
       document.getElementById('companyTagName').textContent = session.name;
       document.getElementById('empSessionName').textContent = session.name;
@@ -2577,6 +2653,21 @@
         firstBtn.classList.add('active');
         document.getElementById(allowed[0]).classList.add('active');
       }
+    }
+    // Masque les catégories qui ne contiennent aucun sous-onglet autorisé pour cet employé.
+    document.querySelectorAll('.dir-categories .dir-cat').forEach(catBtn => {
+      const cat = catBtn.dataset.cat;
+      const hasAccess = Array.from(subtabButtons).some(b => b.dataset.cat === cat && !b.classList.contains('hidden-tab'));
+      catBtn.classList.toggle('hidden-tab', !hasAccess);
+    });
+    // Réapplique le filtre de catégorie Direction en tenant compte des permissions
+    // qui viennent d'être recalculées (un employé ne doit jamais voir un sous-onglet
+    // non autorisé, même en changeant de catégorie).
+    if(typeof applyDirCategory === 'function'){
+      const activeCatBtn = document.querySelector('.dir-categories .dir-cat.active');
+      const activeSub = Array.from(subtabButtons).find(b => b.classList.contains('active'));
+      const catToApply = (activeSub && activeSub.dataset.cat) || (activeCatBtn && activeCatBtn.dataset.cat) || 'overview';
+      applyDirCategory(catToApply);
     }
   }
 
@@ -2813,6 +2904,31 @@
     });
   });
 
+  /* ---------- Catégories Direction (regroupement des sous-onglets) ---------- */
+  const dirCategoryBtns = document.querySelectorAll('.dir-categories .dir-cat');
+  const dirSubtabBtns = document.querySelectorAll('#direction .subtabs .subtab');
+  function applyDirCategory(cat){
+    dirCategoryBtns.forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
+    let firstVisible = null;
+    dirSubtabBtns.forEach(b => {
+      const belongs = b.dataset.cat === cat;
+      b.classList.toggle('cat-hidden', !belongs);
+      // On ignore les sous-onglets masqués par permission (accès Direction limité
+      // accordé à un employé) pour ne jamais activer un panneau non autorisé.
+      if(belongs && !b.classList.contains('hidden-tab') && !firstVisible) firstVisible = b;
+    });
+    // Si le sous-onglet actuellement actif n'appartient plus à la catégorie choisie,
+    // on bascule automatiquement sur le premier sous-onglet autorisé de cette catégorie.
+    const activeSub = document.querySelector('#direction .subtabs .subtab.active');
+    if(firstVisible && (!activeSub || activeSub.dataset.cat !== cat)){
+      firstVisible.click();
+    }
+  }
+  dirCategoryBtns.forEach(btn => {
+    btn.addEventListener('click', () => applyDirCategory(btn.dataset.cat));
+  });
+  if(dirCategoryBtns.length){ applyDirCategory('overview'); }
+
   /* ---------- Formulaire de demande d'annonce (factory réutilisable) ---------- */
   function setupAdForm(cfg){
     const els = {};
@@ -2864,8 +2980,11 @@
       return els.extraTextsContainer ? Array.from(els.extraTextsContainer.querySelectorAll('textarea')) : [];
     }
     function getAllTexts(){
-      const main = els.text.value.trim();
-      const extras = getExtraTextareas().map(t => t.value.trim()).filter(Boolean);
+      // Retronque toujours à 150 caractères exactement (espaces/émojis compris),
+      // pour empêcher réellement tout dépassement, pas seulement l'afficher.
+      const clip = (s) => Array.from(s.trim()).slice(0, 150).join('');
+      const main = clip(els.text.value);
+      const extras = getExtraTextareas().map(t => clip(t.value)).filter(Boolean);
       return main ? [main, ...extras] : extras;
     }
     function isMultiTextMode(){
@@ -3665,9 +3784,19 @@
       return arr;
     })();
 
-    const today = new Date(); today.setHours(0,0,0,0);
-    let cursor = (ad.dateStart && ad.dateStart !== '—') ? new Date(ad.dateStart + 'T00:00:00') : new Date(today);
-    if(cursor < today) cursor = new Date(today);
+    // Point de départ FIXE et stable : la date choisie par l'entreprise, ou sinon
+    // la date/heure exacte d'acceptation de la demande. On ne le recalcule JAMAIS
+    // sur "aujourd'hui" au moment de l'affichage — sinon, chaque jour qui passe
+    // décale les index (et donc les identifiants) de toutes les occurrences, ce qui
+    // faisait apparaître des cases cochées la veille comme déjà cochées le lendemain
+    // (deux jours différents recalculaient parfois les mêmes identifiants).
+    let cursor;
+    if(ad.dateStart && ad.dateStart !== '—'){
+      cursor = new Date(ad.dateStart + 'T00:00:00');
+    }else{
+      cursor = new Date(ad.acceptedAt || Date.now());
+      cursor.setHours(0, 0, 0, 0);
+    }
     // La date de fin est une préférence, pas une limite stricte : si la période demandée
     // (ou les jours autorisés) ne suffit pas à caser toutes les annonces payées, la diffusion
     // continue au-delà, semaine après semaine, jusqu'à épuisement complet du nombre payé.
@@ -3807,20 +3936,24 @@
     }
 
     const myName = session ? session.name : null;
+    const isDirectionViewer = session && session.role === 'direction';
     const nowTs = Date.now();
     planningFocusOccId = null;
     const rows = dayOcc.map(o => {
       const isDone = !!completedMap[o.id];
       const ownedByMe = isDone && completedMap[o.id].by === myName;
-      const locked = isDone && !ownedByMe;
+      // La Direction peut toujours décocher une annonce, même cochée par un employé.
+      const locked = isDone && !ownedByMe && !isDirectionViewer;
 
       const dayMidnight = new Date(o.date + 'T00:00:00').getTime();
       const occTs = dayMidnight + o.sortMinutes * 60000;
       const windowStart = occTs - CHECK_WINDOW_MS;
       const windowEnd = occTs + CHECK_WINDOW_MS;
-      const outOfWindow = !isDone && isToday && (nowTs < windowStart || nowTs > windowEnd);
-      const notTodayBlock = !isDone && !isToday;
-      const notOnDuty = !isDone && !isOnDuty(myName);
+      // La Direction agit comme modératrice : elle peut cocher/décocher n'importe
+      // quelle annonce, n'importe quel jour, sans les restrictions imposées aux employés.
+      const outOfWindow = !isDone && isToday && (nowTs < windowStart || nowTs > windowEnd) && !isDirectionViewer;
+      const notTodayBlock = !isDone && !isToday && !isDirectionViewer;
+      const notOnDuty = !isDone && !isOnDuty(myName) && !isDirectionViewer;
       const disabled = locked || outOfWindow || notTodayBlock || notOnDuty;
       const checkable = !isDone && !disabled;
 
@@ -3843,8 +3976,15 @@
 
       const proofHtml = isDone
         ? (completedMap[o.id].proof
-            ? `<img src="${completedMap[o.id].proof}" class="proof-thumb" style="max-width:120px; max-height:90px; border:1px solid var(--line); display:block; margin-top:6px;">`
+            ? `<img src="${completedMap[o.id].proof}" class="proof-thumb" style="max-width:120px; max-height:90px; border:1px solid var(--line); display:block; margin-top:6px;">${isDirectionViewer ? `<button type="button" class="btn-refuse dir-delete-proof-btn" data-occ="${o.id}" style="margin-top:6px;">🗑️ Supprimer la photo</button>` : ''}`
             : (ownedByMe ? `<div class="paste-zone" data-occ-proof="${o.id}" tabindex="0" style="margin-top:6px; max-width:280px;">Colle (Ctrl+V) ou glisse une capture de l'annonce diffusée<br><label class="file-upload-btn">📁 Choisir une photo<input type="file" accept="image/*" class="proof-file-input" data-occ-proof-input="${o.id}"></label></div>` : ''))
+        : '';
+
+      const dirEditHtml = isDirectionViewer
+        ? `<div class="request-actions" style="margin-top:8px;">
+             <button type="button" class="ad-reset dir-edit-ad-btn" data-ad-id="${escapeHtml(o.ad.id)}">✏️ Modifier le texte</button>
+           </div>
+           <div class="ent-edit-zone" data-dir-edit-zone="${escapeHtml(o.ad.id)}" style="display:none; margin-top:10px;"></div>`
         : '';
 
       const isPast = isToday && occTs < nowTs;
@@ -3858,6 +3998,7 @@
             <input type="checkbox" data-occ="${o.id}" data-company="${escapeHtml(o.ad.company)}" data-text="${escapeHtml(o.ad.text)}" data-date="${o.date}" data-time="${o.time}" ${isDone ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
             <span class="schedule-chip"><b>${escapeHtml(o.ad.company)}</b> — ${escapeHtml(o.ad.text)}</span>
           </label>
+          ${dirEditHtml}
           <button type="button" class="copy-ad-btn" data-copy-text="${escapeHtml(o.ad.text)}" title="Copier le texte de l'annonce">📋 Copier</button>
           ${isDone ? `<span class="badge accepted" style="margin-left:8px;">Diffusée par ${escapeHtml(completedMap[o.id].by)}</span>` : ''}
           ${noteHtml}
@@ -3876,6 +4017,81 @@
       cb.addEventListener('change', () => {
         if(cb.disabled){ return; }
         toggleCompleted(cb.dataset.occ, cb.checked, cb.dataset.company, cb.dataset.text, cb.dataset.date, cb.dataset.time);
+      });
+    });
+
+    container.querySelectorAll('.dir-delete-proof-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const map = loadCompleted();
+        const entry = map[btn.dataset.occ];
+        if(!entry) return;
+        entry.proof = null;
+        saveCompleted(map);
+        const by = session ? session.name : 'Direction';
+        addLog(`Photo justificative supprimée par la Direction (<b>${escapeHtml(by)}</b>) pour une annonce déjà diffusée.`);
+        renderBroadcastPlanning();
+      });
+    });
+
+    container.querySelectorAll('.dir-edit-ad-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const adId = btn.dataset.adId;
+        const zone = container.querySelector(`.ent-edit-zone[data-dir-edit-zone="${adId}"]`);
+        if(!zone) return;
+        const isOpen = zone.style.display !== 'none';
+        container.querySelectorAll('.ent-edit-zone').forEach(z => z.style.display = 'none');
+        if(isOpen) return;
+
+        const list = loadRequests();
+        const ad = list.find(r => r.id === adId);
+        if(!ad) return;
+
+        const hasMulti = ad.texts && ad.texts.length > 1;
+        const textsToEdit = hasMulti ? ad.texts : [ad.text];
+        zone.style.display = 'block';
+        zone.innerHTML = textsToEdit.map((t, i) => `
+          <div class="field" style="margin-bottom:10px;">
+            <label>${hasMulti ? `Texte ${i+1}` : "Texte de l'annonce"} (150 caractères max)</label>
+            <textarea class="dir-edit-text-input" data-idx="${i}" maxlength="150">${escapeHtml(t)}</textarea>
+            <div class="counter-row">${Array.from(t).length} / 150</div>
+          </div>
+        `).join('') + `
+          <button type="button" class="ad-submit dir-edit-save-btn">Enregistrer les modifications</button>
+          <div class="dir-edit-result"></div>
+        `;
+
+        zone.querySelectorAll('.dir-edit-text-input').forEach(ta => {
+          ta.addEventListener('input', () => {
+            let arr = Array.from(ta.value);
+            if(arr.length > 150){ arr = arr.slice(0, 150); ta.value = arr.join(''); }
+            ta.nextElementSibling.textContent = arr.length + ' / 150';
+          });
+        });
+
+        zone.querySelector('.dir-edit-save-btn').addEventListener('click', () => {
+          const inputs = Array.from(zone.querySelectorAll('.dir-edit-text-input'));
+          const newTexts = inputs.map(ta => Array.from(ta.value.trim()).slice(0, 150).join(''));
+          if(newTexts.some(t => !t)){
+            zone.querySelector('.dir-edit-result').innerHTML = '<p style="color:var(--red); font-size:12.5px; margin-top:6px;">Aucun texte ne peut être vide.</p>';
+            return;
+          }
+          const freshList = loadRequests();
+          const freshAd = freshList.find(r => r.id === adId);
+          if(!freshAd) return;
+          if(hasMulti){
+            freshAd.texts = newTexts;
+            freshAd.text = newTexts.map((t, i) => `${i+1}) ${t}`).join('  •  ');
+          }else{
+            freshAd.text = newTexts[0];
+          }
+          saveRequests(freshList);
+          const by = session ? session.name : 'Direction';
+          logCompanyHistory(freshAd.company, 'ad_edited', `Texte de l'annonce corrigé par la Direction`, { by });
+          addLog(`La Direction (<b>${escapeHtml(by)}</b>) a corrigé le texte d'une annonce de <b>${escapeHtml(freshAd.company)}</b>.`);
+          zone.querySelector('.dir-edit-result').innerHTML = '<p style="color:var(--gold); font-size:12.5px; margin-top:6px;">✓ Modifications enregistrées.</p>';
+          setTimeout(() => renderBroadcastPlanning(), 900);
+          showSavedIndicator();
+        });
       });
     });
 
@@ -4002,16 +4218,20 @@
 
     const completedMap = loadCompleted();
     const nowTs = Date.now();
+    const EDIT_LOCK_MS = 5 * 60 * 1000; // verrouillage automatique 5 minutes avant la diffusion
 
     const rows = allOcc.map(o => {
       const done = completedMap[o.id];
       const dayMidnight = new Date(o.date + 'T00:00:00').getTime();
       const occTs = dayMidnight + o.sortMinutes * 60000;
       const isPast = occTs < nowTs;
-      const editLocked = isPast;
+      const editLocked = (occTs - nowTs) <= EDIT_LOCK_MS;
       const doneLabel = done
         ? `<span class="badge accepted" style="margin-left:8px;">✓ Diffusée${done.ts ? ' à ' + new Date(done.ts).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}) : ''}</span>`
         : (isPast ? `<span class="badge hidden" style="margin-left:8px;">Non diffusée</span>` : '');
+      const lockMsg = isPast
+        ? "Modification impossible : cette heure de diffusion est déjà passée."
+        : "Modification impossible : diffusion dans moins de 5 minutes.";
       return `
       <div class="schedule-row has-ads">
         <div class="schedule-time">${o.time}</div>
@@ -4019,9 +4239,9 @@
           <span class="schedule-chip">${escapeHtml(o.ad.text)}</span>
           ${doneLabel}
           <div class="request-actions" style="margin-top:8px;">
-            <button type="button" class="ad-reset ent-edit-ad-btn" data-ad-id="${escapeHtml(o.ad.id)}" ${editLocked ? 'disabled title="Modification impossible : heure déjà passée"' : ''}>Modifier cette annonce</button>
+            <button type="button" class="ad-reset ent-edit-ad-btn" data-ad-id="${escapeHtml(o.ad.id)}" data-occ-ts="${occTs}" ${editLocked ? `disabled title="${lockMsg}"` : ''}>Modifier cette annonce</button>
           </div>
-          ${editLocked ? `<p style="font-size:11.5px; color:var(--text-faint); margin-top:6px;">Modification impossible : cette heure de diffusion est déjà passée.</p>` : ''}
+          ${editLocked ? `<p style="font-size:11.5px; color:var(--text-faint); margin-top:6px;">${lockMsg}</p>` : ''}
           <div class="ent-edit-zone" data-ad-edit-zone="${escapeHtml(o.ad.id)}" style="display:none; margin-top:10px;"></div>
         </div>
       </div>
@@ -4072,8 +4292,20 @@
         });
 
         zone.querySelector('.ent-edit-save-btn').addEventListener('click', () => {
+          // Sécurité : on revérifie l'heure exacte de diffusion au moment d'enregistrer,
+          // pas seulement à l'ouverture du formulaire (cas où l'entreprise a laissé le
+          // formulaire ouvert pendant que le délai de 5 minutes s'écoulait).
+          const occTs = parseInt(btn.dataset.occTs, 10);
+          if(!isNaN(occTs) && (occTs - Date.now()) <= 5 * 60 * 1000){
+            zone.querySelector('.ent-edit-result').innerHTML = '<p style="color:var(--red); font-size:12.5px; margin-top:6px;">Trop tard : cette annonce est maintenant verrouillée (moins de 5 minutes avant sa diffusion).</p>';
+            companyPlanningEditingAdId = null;
+            setTimeout(() => renderCompanyPlanning(), 900);
+            return;
+          }
           const inputs = Array.from(zone.querySelectorAll('.ent-edit-text-input'));
-          const newTexts = inputs.map(ta => ta.value.trim());
+          // On retronque toujours à 150 caractères exactement au moment d'enregistrer,
+          // quel que soit ce qui a pu être saisi ou collé dans le champ.
+          const newTexts = inputs.map(ta => Array.from(ta.value.trim()).slice(0, 150).join(''));
           if(newTexts.some(t => !t)){
             zone.querySelector('.ent-edit-result').innerHTML = '<p style="color:var(--red); font-size:12.5px; margin-top:6px;">Aucun texte ne peut être vide.</p>';
             return;
@@ -4368,6 +4600,23 @@
     el.textContent = count;
   }
 
+  // ---------- Registre de salaire (persistant, indépendant du planning) ----------
+  // Chaque diffusion cochée par un employé ajoute une ligne définitive ici, avec le
+  // montant gagné à cet instant précis. Même si le planning change, si des occurrences
+  // disparaissent ou si leurs identifiants changent, ce registre ne bouge pas : c'est
+  // la seule source de vérité pour le salaire, jusqu'à ce que la Direction le vide
+  // manuellement (une fois les salaires versés, pour repartir à zéro la semaine suivante).
+  const LS_SALARY_LEDGER_KEY = 'echonews_salary_ledger';
+  function loadSalaryLedger(){
+    try{
+      const raw = localStorage.getItem(LS_SALARY_LEDGER_KEY);
+      return raw ? JSON.parse(raw) : [];
+    }catch(e){ return []; }
+  }
+  function saveSalaryLedger(list){
+    try{ localStorage.setItem(LS_SALARY_LEDGER_KEY, JSON.stringify(list)); }catch(e){}
+  }
+
   function toggleCompleted(occId, checked, company, adText, adDate, adTime){
     // Sécurité : on vérifie que l'annonce existe toujours et est bien active
     // avant de cocher/décocher quoi que ce soit. Ça évite qu'une case restée
@@ -4382,9 +4631,10 @@
 
     const map = loadCompleted();
     const myName = session ? session.name : 'Inconnu';
+    const isDirectionActor = session && session.role === 'direction';
     if(checked){
-      if(!isOnDuty(myName)){ renderBroadcastPlanning(); return; }
-      if(map[occId] && map[occId].by !== myName){ renderBroadcastPlanning(); return; }
+      if(!isOnDuty(myName) && !isDirectionActor){ renderBroadcastPlanning(); return; }
+      if(map[occId] && map[occId].by !== myName && !isDirectionActor){ renderBroadcastPlanning(); return; }
       map[occId] = { by: myName, at: new Date().toLocaleString('fr-FR'), ts: Date.now(), proof: null };
       if(company) adjustBalance(company, -1);
       logEmployeeDiffusion({
@@ -4393,10 +4643,21 @@
         at: map[occId].at, ts: map[occId].ts, proof: null
       });
       if(company) logCompanyHistory(company, 'diffusion', adText || 'Annonce diffusée', { at: map[occId].at });
+
+      // Ligne de salaire permanente, au tarif du grade de l'employé à cet instant précis.
+      const ledger = loadSalaryLedger();
+      ledger.unshift({
+        id: 'sal_' + Date.now() + '_' + Math.random().toString(36).slice(2),
+        employee: myName, amount: getGradePriceFor(myName), ts: Date.now(),
+        occId, company: company || '—', text: adText || '', manual: false
+      });
+      saveSalaryLedger(ledger);
     } else {
-      if(map[occId] && map[occId].by !== myName){ renderBroadcastPlanning(); return; }
+      if(map[occId] && map[occId].by !== myName && !isDirectionActor){ renderBroadcastPlanning(); return; }
       delete map[occId];
       if(company) adjustBalance(company, 1);
+      // On retire la ligne de salaire correspondante (case décochée = erreur annulée).
+      saveSalaryLedger(loadSalaryLedger().filter(l => l.occId !== occId));
     }
     saveCompleted(map);
     renderBroadcastPlanning();
@@ -4592,11 +4853,16 @@
     renderOverviewStats();
   });
 
-  wireConfirmButton('resetSalaryBtn', 'resetSalaryZone', 'réinitialiser tous les salaires (toutes les diffusions cochées)', () => {
+  wireTripleConfirmButton('resetSalaryBtn', 'resetSalaryZone', [
+    'Confirmer : vider le salaire de tous les employés (à faire une fois les salaires versés) ?',
+    'Cette action est définitive et ne peut pas être annulée. Continuer ?'
+  ], () => {
+    saveSalaryLedger([]);
     saveCompleted({});
     renderSalary();
     renderBroadcastPlanning();
     renderOverviewStats();
+    addLog('Salaires réinitialisés pour la nouvelle semaine par la direction.');
   });
 
   wireConfirmButton('resetRevenueBtn', 'resetRevenueZone', 'réinitialiser le revenu pub / semaine', () => {
@@ -5173,35 +5439,125 @@
   }
 
   function renderSalary(){
-    const completed = loadCompleted();
-    const entries = Object.values(completed);
-    const targets = ['salaryList', 'dirSalaryList'];
+    const ledger = loadSalaryLedger();
+    const byPerson = {};
+    ledger.forEach(l => {
+      if(!byPerson[l.employee]) byPerson[l.employee] = { count: 0, total: 0 };
+      byPerson[l.employee].count += 1;
+      byPerson[l.employee].total += l.amount;
+    });
+    const names = Object.keys(byPerson).sort((a,b) => byPerson[b].total - byPerson[a].total);
+    const isDirection = session && session.role === 'direction';
 
-    let html;
-    if(entries.length === 0){
-      html = '<p class="requests-empty">Aucune diffusion cochée pour le moment.</p>';
-    } else {
-      const byPerson = {};
-      entries.forEach(e => { byPerson[e.by] = (byPerson[e.by] || 0) + 1; });
-      const names = Object.keys(byPerson).sort((a,b) => (byPerson[b] * getGradePriceFor(b)) - (byPerson[a] * getGradePriceFor(a)));
-      html = names.map(name => {
-        const price = getGradePriceFor(name);
-        const gradeName = getGradeNameFor(name);
-        return `
-        <div class="active-ad-card">
+    function buildCard(name){
+      const gradeName = getGradeNameFor(name);
+      const info = byPerson[name];
+      const detailBtn = isDirection
+        ? `<button type="button" class="ad-reset salary-detail-btn" data-employee="${escapeHtml(name)}" style="margin-top:8px;">Voir le détail / corriger</button>
+           <div class="salary-detail-zone" data-salary-detail="${escapeHtml(name)}" style="display:none; margin-top:10px;"></div>`
+        : '';
+      return `
+        <div class="active-ad-card" data-employee="${escapeHtml(name)}">
           <div class="active-ad-top">
             <span class="aacompany">${escapeHtml(name)} <span style="color:var(--text-faint); font-weight:400; font-size:12px;">(${escapeHtml(gradeName)})</span></span>
-            <span class="cstotal" style="font-family:'Oswald',sans-serif; font-weight:600; font-size:18px; color:var(--gold);">${formatUSD(byPerson[name] * price)}</span>
+            <span class="cstotal" style="font-family:'Oswald',sans-serif; font-weight:600; font-size:18px; color:var(--gold);">${formatUSD(info.total)}</span>
           </div>
-          <div class="cs-counts"><span><b>${byPerson[name]}</b> annonce(s) diffusée(s) × ${formatUSD(price)}</span></div>
+          <div class="cs-counts"><span><b>${info.count}</b> ligne(s) de salaire</span></div>
+          ${detailBtn}
         </div>
       `;
-      }).join('');
     }
 
-    targets.forEach(id => {
-      const el = document.getElementById(id);
-      if(el) el.innerHTML = html;
+    const html = names.length === 0
+      ? '<p class="requests-empty">Aucune diffusion cochée pour le moment.</p>'
+      : names.map(buildCard).join('');
+
+    const salaryListEl = document.getElementById('salaryList');
+    if(salaryListEl) salaryListEl.innerHTML = html;
+
+    const dirSalaryListEl = document.getElementById('dirSalaryList');
+    if(dirSalaryListEl){
+      dirSalaryListEl.innerHTML = html;
+      if(isDirection){
+        dirSalaryListEl.querySelectorAll('.salary-detail-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const name = btn.dataset.employee;
+            const zone = dirSalaryListEl.querySelector(`.salary-detail-zone[data-salary-detail="${CSS.escape(name)}"]`);
+            if(!zone) return;
+            const isOpen = zone.style.display !== 'none';
+            dirSalaryListEl.querySelectorAll('.salary-detail-zone').forEach(z => z.style.display = 'none');
+            if(isOpen) return;
+            renderSalaryDetailZone(zone, name);
+            zone.style.display = 'block';
+          });
+        });
+      }
+    }
+
+    renderSalaryCorrectionPicker();
+  }
+
+  function renderSalaryDetailZone(zone, employeeName){
+    const entries = loadSalaryLedger().filter(l => l.employee === employeeName).sort((a,b) => b.ts - a.ts);
+    zone.innerHTML = entries.map(l => `
+      <div class="account-row" data-salary-id="${escapeHtml(l.id)}">
+        <span class="aname">${new Date(l.ts).toLocaleString('fr-FR')}${l.manual ? ' — <i>correction manuelle</i>' : ''}</span>
+        <span class="acreds">${escapeHtml(l.company)} — ${escapeHtml(l.text || l.reason || '')} — ${formatUSD(l.amount)}</span>
+        <button data-action="delete-salary-line" data-id="${escapeHtml(l.id)}">Supprimer</button>
+      </div>
+    `).join('') || '<p class="requests-empty">Aucune ligne pour cet employé.</p>';
+
+    zone.querySelectorAll('button[data-action="delete-salary-line"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const list = loadSalaryLedger();
+        const idx = list.findIndex(l => l.id === btn.dataset.id);
+        if(idx === -1) return;
+        const removed = list[idx];
+        list.splice(idx, 1);
+        saveSalaryLedger(list);
+        const by = session ? session.name : 'Direction';
+        addLog(`Ligne de salaire de <b>${formatUSD(removed.amount)}</b> supprimée pour <b>${escapeHtml(employeeName)}</b> par <b>${escapeHtml(by)}</b>.`);
+        renderSalary();
+        showSavedIndicator();
+      });
+    });
+  }
+
+  function renderSalaryCorrectionPicker(){
+    const picker = document.getElementById('salaryCorrectionEmployeePicker');
+    if(!picker) return;
+    const currentValue = picker.value;
+    picker.innerHTML = loadEmployeeAccounts().map(acc => `<option value="${escapeHtml(acc.display)}">${escapeHtml(acc.display)}</option>`).join('');
+    if(currentValue) picker.value = currentValue;
+  }
+
+  const salaryCorrectionBtn = document.getElementById('salaryCorrectionBtn');
+  if(salaryCorrectionBtn){
+    salaryCorrectionBtn.addEventListener('click', () => {
+      const picker = document.getElementById('salaryCorrectionEmployeePicker');
+      const amountInput = document.getElementById('salaryCorrectionAmount');
+      const reasonInput = document.getElementById('salaryCorrectionReason');
+      const resultEl = document.getElementById('salaryCorrectionResult');
+      const employee = picker ? picker.value : '';
+      const amount = parseInt(amountInput.value, 10);
+      if(!employee || isNaN(amount) || amount === 0){
+        if(resultEl) resultEl.innerHTML = '<p style="color:var(--red); font-size:13px; margin-top:6px;">Choisis un employé et un montant différent de 0 (positif pour ajouter, négatif pour retirer).</p>';
+        return;
+      }
+      const reason = (reasonInput ? reasonInput.value.trim() : '') || 'Correction manuelle';
+      const ledger = loadSalaryLedger();
+      ledger.unshift({
+        id: 'sal_' + Date.now() + '_' + Math.random().toString(36).slice(2),
+        employee, amount, ts: Date.now(), occId: null, company: '—', text: reason, manual: true, reason
+      });
+      saveSalaryLedger(ledger);
+      const by = session ? session.name : 'Direction';
+      addLog(`Correction de salaire de ${amount > 0 ? '+' : ''}${formatUSD(amount)} pour <b>${escapeHtml(employee)}</b> par <b>${escapeHtml(by)}</b> (${escapeHtml(reason)}).`);
+      if(amountInput) amountInput.value = '';
+      if(reasonInput) reasonInput.value = '';
+      if(resultEl) resultEl.innerHTML = `<p style="color:var(--gold); font-size:13px; margin-top:6px;">✓ Correction enregistrée pour ${escapeHtml(employee)}.</p>`;
+      renderSalary();
+      showSavedIndicator();
     });
   }
 
@@ -5800,7 +6156,7 @@
     'echonews_duty_totals', 'echonews_grades', 'echonews_employee_grades', 'echonews_week_reset_marker',
     'echonews_company_prices', 'echonews_company_balances', 'echonews_grade_permissions',
     'echonews_week_expenses', 'echonews_revenue_reset_marker', 'echonews_debt_adjustments',
-    'echonews_company_payments', 'echonews_reviews'
+    'echonews_company_payments', 'echonews_reviews', 'echonews_salary_ledger'
   ];
 
   let cloudDb = null;
