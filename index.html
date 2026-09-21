@@ -1074,7 +1074,7 @@
               <div id="extraTexts"></div>
               <div class="field">
                 <button type="button" class="ad-reset" id="addTextBtn">+ Ajouter un autre texte d'annonce (diffusé selon la fréquence choisie)</button>
-                <p class="recap-note" id="multiTextNote" style="display:none; margin-top:8px;">Plusieurs textes différents : chacun sera diffusé une fois, espacé du précédent selon la fréquence de diffusion choisie ci-dessus, à partir de l'heure de début. Le nombre d'annonces ci-dessous ne s'applique plus dans ce mode (calculé automatiquement).</p>
+                <p class="recap-note" id="multiTextNote" style="display:none; margin-top:8px;">Plusieurs textes différents : ils tournent en boucle (texte 1, 2, 3, puis retour au texte 1...) selon la fréquence choisie, jusqu'à atteindre le nombre total d'annonces indiqué ci-dessous.</p>
               </div>
 
               <div class="field">
@@ -1433,7 +1433,7 @@
             <div id="partExtraTexts"></div>
             <div class="field">
               <button type="button" class="ad-reset" id="partAddTextBtn">+ Ajouter un autre texte d'annonce (diffusé selon la fréquence choisie)</button>
-              <p class="recap-note" id="partMultiTextNote" style="display:none; margin-top:8px;">Plusieurs textes différents : chacun sera diffusé une fois, espacé du précédent selon la fréquence de diffusion choisie ci-dessus, à partir de l'heure de début. Le nombre d'annonces ci-dessous ne s'applique plus dans ce mode (calculé automatiquement).</p>
+              <p class="recap-note" id="partMultiTextNote" style="display:none; margin-top:8px;">Plusieurs textes différents : ils tournent en boucle (texte 1, 2, 3, puis retour au texte 1...) selon la fréquence choisie, jusqu'à atteindre le nombre total d'annonces indiqué ci-dessous.</p>
             </div>
 
             <div class="field">
@@ -2633,12 +2633,6 @@
     function updateMultiTextUI(){
       const multi = isMultiTextMode();
       if(els.multiTextNote) els.multiTextNote.style.display = multi ? 'block' : 'none';
-      if(multi){
-        els.adCount.value = getAllTexts().length || 1;
-        els.adCount.disabled = true;
-      }else{
-        els.adCount.disabled = false;
-      }
       updateTotal();
     }
     function addExtraTextField(){
@@ -2684,13 +2678,8 @@
       recapDays.textContent = selected.length === 7 ? 'Tous les jours' : selected.sort().map(d => DAY_LABELS[d]).join(', ');
     }
     function updateTotal(){
-      let count;
-      if(isMultiTextMode()){
-        count = getAllTexts().length || 1;
-      }else{
-        count = parseInt(els.adCount.value, 10);
-        if(isNaN(count) || count < 1){ count = 1; }
-      }
+      let count = parseInt(els.adCount.value, 10);
+      if(isNaN(count) || count < 1){ count = 1; }
       const unitPrice = session ? getUnitPriceForCompany(session.name) : UNIT_PRICE;
       els.recapCount.textContent = count;
       const unitEl = document.getElementById(cfg.recapUnitPriceId);
@@ -2779,13 +2768,8 @@
       const texts = getAllTexts();
       if(texts.length === 0){ els.text.focus(); return; }
       const isMulti = texts.length > 1;
-      let count;
-      if(isMulti){
-        count = texts.length;
-      }else{
-        count = parseInt(els.adCount.value, 10);
-        if(isNaN(count) || count < 1){ count = 1; }
-      }
+      let count = parseInt(els.adCount.value, 10);
+      if(isNaN(count) || count < 1){ count = 1; }
 
       if(cfg.balanceMode){
         const balance = session ? getBalance(session.name) : 0;
@@ -3397,33 +3381,8 @@
   // Construit, pour une annonce acceptée, la liste de ses diffusions (date + heure)
   // en respectant : la plage horaire demandée, la fréquence, et le nombre total payé,
   // réparties jour après jour sur la période demandée (donc sur la semaine si besoin).
-  // Cas particulier : plusieurs textes d'annonce différents dans une même demande.
-  // Chaque texte est diffusé une seule fois, espacé du précédent selon la fréquence
-  // de diffusion choisie dans le formulaire (jours ignorés dans ce mode).
-  function generateMultiTextSchedule(ad){
-    const startM = toMinutes(ad.timeStart || '12:00');
-    const today = new Date(); today.setHours(0,0,0,0);
-    let baseDate = (ad.dateStart && ad.dateStart !== '—') ? new Date(ad.dateStart + 'T00:00:00') : new Date(today);
-    if(baseDate < today) baseDate = new Date(today);
-    const GAP = FREQ_MINUTES[ad.freq] || 60; // écart entre chaque texte différent, selon la fréquence choisie
-    return ad.texts.map((txt, i) => {
-      const totalM = startM + i * GAP;
-      const dayOffset = Math.floor(totalM / 1440);
-      const d = new Date(baseDate.getTime() + dayOffset * 86400000);
-      return {
-        id: ad.id + '_' + i,
-        date: toISODate(d),
-        time: minutesToLabel(totalM),
-        sortMinutes: ((totalM % 1440) + 1440) % 1440,
-        ad: Object.assign({}, ad, { text: txt })
-      };
-    });
-  }
-
   function generateSchedule(ad){
-    if(ad.texts && ad.texts.length > 1){
-      return generateMultiTextSchedule(ad);
-    }
+    const hasMultiTexts = ad.texts && ad.texts.length > 1;
     const step = FREQ_MINUTES[ad.freq] || 60;
     const startM = toMinutes(ad.timeStart || '12:00');
     const endM = toMinutes(ad.timeEnd || '02:00');
@@ -3453,12 +3412,15 @@
       if(!allowedDays || allowedDays.includes(dow)){
         for(const offset of offsets){
           if(occurrences.length >= ad.count) break;
+          // Plusieurs textes différents : ils tournent en boucle (texte 1, 2, 3, puis
+          // retour au texte 1...) pour remplir le nombre total d'annonces demandé,
+          // selon la même fréquence que d'habitude.
           occurrences.push({
             id: ad.id + '_' + occurrences.length,
             date: toISODate(cursor),
             time: minutesToLabel(startM + offset),
             sortMinutes: startM + offset,
-            ad
+            ad: hasMultiTexts ? Object.assign({}, ad, { text: ad.texts[occurrences.length % ad.texts.length] }) : ad
           });
         }
       }
