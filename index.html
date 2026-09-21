@@ -3547,22 +3547,11 @@
     const viewedDay = viewedDayEarly;
     const isToday = planningDayOffset === 0;
     const completedMap = loadCompleted();
-    const REMOVE_AFTER_MS = 5 * 60 * 1000;
     const CHECK_WINDOW_MS = 5 * 60 * 1000;
-    const now = Date.now();
+    // Le planning du jour reste affiché en entier, du début à la fin : une annonce
+    // ne disparaît plus toute seule au fil du temps, qu'elle ait été cochée ou non.
     const dayOcc = allOcc
       .filter(o => o.date === viewedDay)
-      .filter(o => {
-        const done = completedMap[o.id];
-        if(done){
-          if(!done.proof) return true;
-          return (now - done.ts) < REMOVE_AFTER_MS;
-        }
-        if(!isToday) return true;
-        const dayMidnight = new Date(o.date + 'T00:00:00').getTime();
-        const occTs = dayMidnight + o.sortMinutes * 60000;
-        return now <= (occTs + CHECK_WINDOW_MS);
-      })
       .sort((a,b) => a.sortMinutes - b.sortMinutes);
 
     const dateObj = new Date(viewedDay + 'T00:00:00');
@@ -3603,7 +3592,11 @@
       } else if(outOfWindow){
         const startLabel = new Date(windowStart).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
         const endLabel = new Date(windowEnd).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
-        noteHtml = `<span class="badge hidden" style="margin-left:6px;">Cochable entre ${startLabel} et ${endLabel}</span>`;
+        if(nowTs > windowEnd){
+          noteHtml = `<span class="badge hidden" style="margin-left:6px;">Non cochée à temps (délai dépassé)</span>`;
+        }else{
+          noteHtml = `<span class="badge hidden" style="margin-left:6px;">Cochable entre ${startLabel} et ${endLabel}</span>`;
+        }
       }
 
       const proofHtml = isDone
@@ -4108,6 +4101,17 @@
   }
 
   function toggleCompleted(occId, checked, company, adText, adDate, adTime){
+    // Sécurité : on vérifie que l'annonce existe toujours et est bien active
+    // avant de cocher/décocher quoi que ce soit. Ça évite qu'une case restée
+    // affichée par erreur (annonce supprimée entre-temps par la direction)
+    // débite quand même le solde de l'entreprise.
+    const adId = occId.slice(0, occId.lastIndexOf('_'));
+    const stillValid = loadRequests().some(r => r.id === adId && r.status === 'accepted');
+    if(!stillValid){
+      renderBroadcastPlanning();
+      return;
+    }
+
     const map = loadCompleted();
     const myName = session ? session.name : 'Inconnu';
     if(checked){
