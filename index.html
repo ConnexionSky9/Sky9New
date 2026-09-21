@@ -611,6 +611,8 @@
   .schedule-row.has-ads{ background: var(--bg-raised); }
   .schedule-row.row-diffused{ background: rgba(255, 214, 51, 0.28); }
   .schedule-row.row-diffused .schedule-time{ color: var(--text-dim); }
+  .schedule-row.row-past{ opacity: 0.45; }
+  .schedule-row.row-past:hover{ opacity: 0.7; }
   .schedule-time{
     font-family:'IBM Plex Mono', monospace; font-size: 12px; color: var(--text-faint);
     width: 52px; flex-shrink:0; padding-top: 2px;
@@ -1363,6 +1365,7 @@
           <button id="planningPrevBtn" type="button">◀ Jour précédent</button>
           <button id="planningTodayBtn" type="button">Aujourd'hui</button>
           <button id="planningNextBtn" type="button">Jour suivant ▶</button>
+          <button id="planningNowBtn" type="button">🎯 Aller à l'heure actuelle</button>
         </div>
         <div id="broadcastPlanning"><p class="requests-empty">Aucune annonce acceptée pour le moment.</p></div>
       </div>
@@ -1766,9 +1769,28 @@
 
       <div class="subpanel" id="dirDebts">
         <div class="requests-block">
-          <h2>Facturation — ce que doivent les entreprises</h2>
-          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Total dû par chaque entreprise sur ses annonces acceptées. "Marquer comme payé" remet son solde à zéro.</p>
-          <div id="debtsList"></div>
+          <h2>Ajouter une facturation manuelle</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Facture directement une entreprise pour un montant donné. Validé immédiatement : compte tout de suite dans le Revenu / semaine et l'Impôt.</p>
+          <div class="field-pair" style="margin-bottom:14px;">
+            <div class="field">
+              <label for="manualInvoiceCompanyPicker">Entreprise</label>
+              <select id="manualInvoiceCompanyPicker"></select>
+            </div>
+            <div class="field">
+              <label for="manualInvoiceAmountInput">Montant à facturer ($)</label>
+              <input type="number" id="manualInvoiceAmountInput" min="1" step="1000" placeholder="Ex : 50000">
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:14px;">
+            <label for="manualInvoiceLabel">Motif (optionnel)</label>
+            <input type="text" id="manualInvoiceLabel" placeholder="Ex : Rattrapage annonce papier">
+          </div>
+          <button class="ad-submit" id="manualInvoiceBtn" style="margin-bottom:10px;">Ajouter la facturation</button>
+          <div id="manualInvoiceResult"></div>
+          <div style="margin-top:20px;">
+            <p style="font-size:12px; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:10px;">Facturations manuelles récentes</p>
+            <div id="manualInvoicesList"><p class="requests-empty">Aucune facturation manuelle pour le moment.</p></div>
+          </div>
         </div>
       </div>
 
@@ -1906,32 +1928,6 @@
           <p style="font-size:13px; color:var(--text-dim); margin:0 0 14px;">Solde actuel : <b id="creditCompanyBalance" style="color:var(--gold);">0</b> annonce(s)</p>
           <button class="ad-submit" id="creditCompanyBtn" style="margin-bottom:10px;">Ajouter au solde</button>
           <div id="creditCompanyResult"></div>
-        </div>
-
-        <div class="requests-block">
-          <h2>Ajouter une facturation manuelle</h2>
-          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Ajoute un montant dû manuellement pour une entreprise (même sans annonce acceptée). Il apparaît dans l'onglet Facturation, et n'est compté dans le Revenu / semaine et l'Impôt qu'une fois coché comme payé là-bas.</p>
-          <div class="field-pair" style="margin-bottom:14px;">
-            <div class="field">
-              <label for="manualInvoiceCompanyPicker">Entreprise</label>
-              <select id="manualInvoiceCompanyPicker"></select>
-            </div>
-            <div class="field">
-              <label for="manualInvoiceAmountInput">Montant à facturer ($)</label>
-              <input type="number" id="manualInvoiceAmountInput" min="1" step="1000" placeholder="Ex : 50000">
-            </div>
-          </div>
-          <div class="field" style="margin-bottom:14px;">
-            <label for="manualInvoiceLabel">Motif (optionnel)</label>
-            <input type="text" id="manualInvoiceLabel" placeholder="Ex : Rattrapage annonce papier">
-          </div>
-          <p style="font-size:13px; color:var(--text-dim); margin:0 0 14px;">Montant actuellement dû (annonces non payées) : <b id="manualInvoiceCompanyBalance" style="color:var(--gold);">$0</b></p>
-          <button class="ad-submit" id="manualInvoiceBtn" style="margin-bottom:10px;">Ajouter la facturation</button>
-          <div id="manualInvoiceResult"></div>
-          <div style="margin-top:20px;">
-            <p style="font-size:12px; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:10px;">Facturations manuelles récentes</p>
-            <div id="manualInvoicesList"><p class="requests-empty">Aucune facturation manuelle pour le moment.</p></div>
-          </div>
         </div>
 
         <div class="requests-block">
@@ -2484,7 +2480,7 @@
     }
   }
 
-  const DIRECTION_SUBTAB_PERMS = ['dirOverview', 'dirRequests', 'dirActive', 'dirSalary', 'dirTax'];
+  const DIRECTION_SUBTAB_PERMS = ['dirOverview', 'dirRequests', 'dirActive', 'dirSalary', 'dirTax', 'dirDebts'];
 
   function applyEmployeeDirectionAccess(){
     const tabDirection = document.getElementById('tabBtnDirection');
@@ -2546,6 +2542,22 @@
     planningDayOffset = 0; renderBroadcastPlanning();
   });
 
+  const planningNowBtn = document.getElementById('planningNowBtn');
+  if(planningNowBtn){
+    planningNowBtn.addEventListener('click', () => {
+      planningDayOffset = 0;
+      renderBroadcastPlanning();
+      const container = document.getElementById('broadcastPlanning');
+      if(!container) return;
+      let target = planningFocusOccId ? container.querySelector(`[data-occ-row="${planningFocusOccId}"]`) : null;
+      if(!target){
+        const allRows = container.querySelectorAll('.schedule-row[data-occ-row]');
+        target = allRows.length ? allRows[allRows.length - 1] : null;
+      }
+      if(target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }
+
   const entPlanningPrevBtn = document.getElementById('entPlanningPrevBtn');
   const entPlanningNextBtn = document.getElementById('entPlanningNextBtn');
   const entPlanningTodayBtn = document.getElementById('entPlanningTodayBtn');
@@ -2577,7 +2589,7 @@
         if(btn.dataset.subtarget === 'dirSalary') renderSalary();
         if(btn.dataset.subtarget === 'dirOverview'){ renderOverviewStats(); renderCompanySummary(); renderLogs(); }
         if(btn.dataset.subtarget === 'dirTax') renderTax();
-        if(btn.dataset.subtarget === 'dirDebts') renderDebts();
+        if(btn.dataset.subtarget === 'dirDebts') renderManualInvoicePicker();
         if(btn.dataset.subtarget === 'dirEmpHistory') renderEmpHistoryPicker();
         if(btn.dataset.subtarget === 'dirCompanyHistory') renderCompanyHistoryPicker();
         if(btn.dataset.subtarget === 'empPlanning') renderBroadcastPlanning();
@@ -3526,6 +3538,7 @@
   }
 
   let planningDayOffset = 0;
+  let planningFocusOccId = null;
   function addDaysToISO(dateStr, days){
     const d = new Date(dateStr + 'T00:00:00');
     d.setDate(d.getDate() + days);
@@ -3597,6 +3610,7 @@
 
     const myName = session ? session.name : null;
     const nowTs = Date.now();
+    planningFocusOccId = null;
     const rows = dayOcc.map(o => {
       const isDone = !!completedMap[o.id];
       const ownedByMe = isDone && completedMap[o.id].by === myName;
@@ -3635,8 +3649,11 @@
             : (ownedByMe ? `<div class="paste-zone" data-occ-proof="${o.id}" tabindex="0" style="margin-top:6px; max-width:280px;">Colle (Ctrl+V) ou glisse une capture de l'annonce diffusée</div>` : ''))
         : '';
 
+      const isPast = isToday && occTs < nowTs;
+      if(isToday && !isPast && planningFocusOccId === null){ planningFocusOccId = o.id; }
+
       return `
-      <div class="schedule-row has-ads${checkable ? ' row-diffused' : ''}">
+      <div class="schedule-row has-ads${checkable ? ' row-diffused' : ''}${isPast ? ' row-past' : ''}" data-occ-row="${o.id}">
         <div class="schedule-time">${o.time}</div>
         <div class="schedule-content">
           <label class="schedule-check" style="${disabled ? 'cursor:not-allowed;' : ''}">
@@ -4382,11 +4399,12 @@
     addLog('Réinitialisation complète des entreprises & annonces par la direction.');
   });
 
-  wireConfirmButton('resetBillingBtn', 'resetBillingZone', 'supprimer tout l\'historique des paiements effectués', () => {
-    const list = loadRequests().filter(r => !(r.status === 'accepted' && r.paid));
-    saveRequests(list);
-    renderDebts();
-    addLog('Suppression de l\'historique des paiements par la direction.');
+  wireConfirmButton('resetBillingBtn', 'resetBillingZone', 'supprimer tout l\'historique des facturations manuelles', () => {
+    savePayments(loadPayments().filter(p => !p.manual));
+    renderManualInvoicePicker();
+    if(typeof renderTax === 'function') renderTax();
+    if(typeof renderOverviewStats === 'function') renderOverviewStats();
+    addLog('Suppression de l\'historique des facturations manuelles par la direction.');
   });
 
   function credsHTML(user, pass){
@@ -4650,28 +4668,13 @@
   }
 
   /* ---------- Ajouter une facturation manuelle ---------- */
-  function getCompanyDisplayedOwed(company){
-    const allAccepted = loadRequests().filter(r => r.status === 'accepted' && r.company === company);
-    const rawOwed = allAccepted.reduce((sum, r) => sum + (r.paid ? 0 : r.total), 0);
-    return Math.max(0, rawOwed + getCompanyAdjustmentTotal(company));
-  }
-
-  function renderManualInvoiceBalance(){
-    const picker = document.getElementById('manualInvoiceCompanyPicker');
-    const balanceEl = document.getElementById('manualInvoiceCompanyBalance');
-    if(!picker || !balanceEl) return;
-    balanceEl.textContent = picker.value ? formatUSD(getCompanyDisplayedOwed(picker.value)) : '$0';
-  }
-
   function renderManualInvoicePicker(){
     const picker = document.getElementById('manualInvoiceCompanyPicker');
     if(!picker) return;
     if(!picker.dataset.filled){
       picker.innerHTML = COMPANY_ACCOUNTS.map(acc => `<option value="${escapeHtml(acc.display)}">${escapeHtml(acc.display)}</option>`).join('');
       picker.dataset.filled = '1';
-      picker.addEventListener('change', renderManualInvoiceBalance);
     }
-    renderManualInvoiceBalance();
     renderManualInvoicesList();
   }
 
@@ -4739,9 +4742,7 @@
 
       if(input) input.value = '';
       if(labelInput) labelInput.value = '';
-      renderManualInvoiceBalance();
       renderManualInvoicesList();
-      renderDebts();
       if(typeof renderTax === 'function') renderTax();
       if(typeof renderOverviewStats === 'function') renderOverviewStats();
       showSavedIndicator();
@@ -4789,6 +4790,7 @@
     { key: 'dirActive', label: "Annonces actives" },
     { key: 'dirSalary', label: "Salaire" },
     { key: 'dirTax', label: "Impôt" },
+    { key: 'dirDebts', label: "Facturation" },
     { key: 'createEmployeeAccounts', label: "Créer des identifiants" }
   ];
 
@@ -5080,145 +5082,8 @@
     return { range, payments, adsCa, expenses, expensesTotal, total };
   }
 
-  function renderDebts(){
-    const container = document.getElementById('debtsList');
-    if(!container) return;
-
-    const allAccepted = loadRequests().filter(r => r.status === 'accepted');
-    const adjustments = loadDebtAdjustments();
-
-    const byCompany = {};
-    allAccepted.forEach(r => {
-      if(!byCompany[r.company]) byCompany[r.company] = { owed: 0, paid: 0 };
-      if(r.paid){ byCompany[r.company].paid += r.total; }
-      else{ byCompany[r.company].owed += r.total; }
-    });
-    // Une entreprise peut avoir une facturation manuelle sans jamais avoir eu
-    // d'annonce acceptée : on l'affiche quand même.
-    adjustments.forEach(a => {
-      if(!byCompany[a.company]) byCompany[a.company] = { owed: 0, paid: 0 };
-    });
-
-    const displayedOwedOf = (name) => Math.max(0, byCompany[name].owed + getCompanyAdjustmentTotal(name, adjustments));
-
-    const names = Object.keys(byCompany).filter(name => displayedOwedOf(name) > 0 || byCompany[name].paid > 0)
-      .sort((a,b) => displayedOwedOf(b) - displayedOwedOf(a));
-
-    if(names.length === 0){
-      container.innerHTML = '<p class="requests-empty">Aucune facturation en cours pour le moment.</p>';
-      return;
-    }
-
-    const grandTotal = names.reduce((sum, n) => sum + displayedOwedOf(n), 0);
-
-    const rows = names.map(name => {
-      const displayedOwed = displayedOwedOf(name);
-      const isFullyPaid = displayedOwed <= 0;
-      const amountHtml = isFullyPaid
-        ? `<span class="badge accepted">Payé</span>`
-        : `<span class="debt-amount-edit">$<input type="number" class="debt-amount-input" data-company="${escapeHtml(name)}" min="0" step="1000" value="${displayedOwed}"></span>`;
-      return `
-        <div class="active-ad-card" data-company="${escapeHtml(name)}">
-          <div class="active-ad-top">
-            <span class="aacompany">${escapeHtml(name)}</span>
-            ${amountHtml}
-          </div>
-          <label class="debt-paid-check">
-            <input type="checkbox" data-action="toggle-paid" data-company="${escapeHtml(name)}" ${isFullyPaid ? 'checked' : ''}>
-            L'entreprise a payé
-          </label>
-        </div>
-      `;
-    }).join('');
-
-    container.innerHTML = `
-      <div class="kpi-row" style="margin-bottom:20px; grid-template-columns: 1fr;">
-        <div class="kpi">
-          <div class="label">Total dû par l'ensemble des entreprises</div>
-          <div class="value">${formatUSD(grandTotal)}</div>
-          <div class="sub">${names.length} entreprise(s) au total — modifie un montant en cas d'erreur, il se répercute automatiquement dans le Revenu / semaine une fois validé.</div>
-        </div>
-      </div>
-      ${rows}
-    `;
-
-    container.querySelectorAll('input.debt-amount-input').forEach(input => {
-      const commit = () => {
-        let newVal = parseInt(input.value, 10);
-        if(isNaN(newVal) || newVal < 0) newVal = 0;
-        input.value = newVal;
-        const company = input.dataset.company;
-        const currentDisplayed = displayedOwedOf(company);
-        const delta = newVal - currentDisplayed;
-        if(delta === 0) return;
-        const list = loadDebtAdjustments();
-        list.push({ id: 'adj_' + Date.now(), company, amount: delta, ts: Date.now() });
-        saveDebtAdjustments(list);
-        const by = session ? session.name : 'Direction';
-        addLog(`Montant dû corrigé manuellement pour <b>${escapeHtml(company)}</b> : ${delta > 0 ? '+' : ''}${formatUSD(delta)} (nouveau montant : ${formatUSD(newVal)}) par <b>${escapeHtml(by)}</b>.`);
-        logCompanyHistory(company, 'debt_adjusted', `Montant dû corrigé manuellement (${delta > 0 ? '+' : ''}${formatUSD(delta)})`, { by, newTotal: newVal });
-        renderDebts();
-        if(typeof renderTax === 'function') renderTax();
-        if(typeof renderOverviewStats === 'function') renderOverviewStats();
-        showSavedIndicator();
-      };
-      input.addEventListener('change', commit);
-      input.addEventListener('blur', commit);
-    });
-
-    container.querySelectorAll('input[data-action="toggle-paid"]').forEach(cb => {
-      cb.addEventListener('change', () => {
-        const company = cb.dataset.company;
-        const by = session ? session.name : 'Direction';
-        if(cb.checked){
-          // ---- Marquer comme payé : on valide le montant actuel (annonces + corrections) ----
-          const list = loadRequests();
-          const targets = list.filter(r => r.company === company && r.status === 'accepted' && !r.paid);
-          const requestIds = targets.map(r => r.id);
-          const rawSum = targets.reduce((sum, r) => sum + r.total, 0);
-          const allAdjustments = loadDebtAdjustments();
-          const companyAdjustments = allAdjustments.filter(a => a.company === company);
-          const otherAdjustments = allAdjustments.filter(a => a.company !== company);
-          const adjustmentTotal = companyAdjustments.reduce((sum, a) => sum + a.amount, 0);
-          const amount = Math.max(0, rawSum + adjustmentTotal);
-
-          targets.forEach(r => { r.paid = true; });
-          saveRequests(list);
-          saveDebtAdjustments(otherAdjustments);
-
-          const payments = loadPayments();
-          payments.unshift({ id: 'pay_' + Date.now(), company, amount, ts: Date.now(), by, requestIds, removedAdjustments: companyAdjustments });
-          savePayments(payments);
-
-          addLog(`<b>${escapeHtml(company)}</b> marquée comme ayant payé <b>${formatUSD(amount)}</b> par <b>${escapeHtml(by)}</b>.`);
-          logCompanyHistory(company, 'marked_paid', `Solde marqué comme payé (${formatUSD(amount)})`, { by, amount });
-        }else{
-          // ---- Décocher : annule le dernier paiement validé pour cette entreprise ----
-          const payments = loadPayments();
-          const idx = payments.findIndex(p => p.company === company);
-          if(idx === -1) return;
-          const payment = payments[idx];
-
-          const list = loadRequests();
-          list.forEach(r => { if(payment.requestIds && payment.requestIds.includes(r.id)) r.paid = false; });
-          saveRequests(list);
-
-          const adjustments = loadDebtAdjustments().concat(payment.removedAdjustments || []);
-          saveDebtAdjustments(adjustments);
-
-          payments.splice(idx, 1);
-          savePayments(payments);
-
-          addLog(`Paiement de <b>${formatUSD(payment.amount)}</b> annulé pour <b>${escapeHtml(company)}</b> par <b>${escapeHtml(by)}</b>.`);
-          logCompanyHistory(company, 'payment_cancelled', `Paiement annulé (${formatUSD(payment.amount)})`, { by });
-        }
-        renderDebts();
-        if(typeof renderTax === 'function') renderTax();
-        if(typeof renderOverviewStats === 'function') renderOverviewStats();
-        showSavedIndicator();
-      });
-    });
-  }
+  // (L'ancien système de facturation automatique basé sur les annonces acceptées
+  // a été retiré : seule la facturation manuelle est utilisée désormais.)
 
   /* ---------- Historique permanent employé ---------- */
   const HISTORY_TYPE_LABELS = {
@@ -5765,7 +5630,7 @@
           'renderGradesManagement', 'renderGradePermissionsTable', 'renderIdentifiants',
           'renderEmpIdentifiantsList', 'renderSalary', 'renderBroadcastPlanning',
           'renderMyRequests', 'renderMyRechargeRequests', 'renderCompanyProfile', 'renderCompanyPlanning', 'renderMyDoneAds',
-          'renderPricingPicker', 'renderCreditCompanyPicker', 'renderManualInvoicePicker', 'renderDebts', 'renderTax',
+          'renderPricingPicker', 'renderCreditCompanyPicker', 'renderManualInvoicePicker', 'renderTax',
           'renderOverviewStats', 'renderWeeklyCompanyRecap', 'applySession'
         ];
         fns.forEach(name => {
