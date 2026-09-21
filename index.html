@@ -357,6 +357,17 @@
   }
   .counter-row.limit{ color: var(--red); }
 
+  .star-picker{ display:flex; gap:6px; font-size:34px; line-height:1; }
+  .star-picker .star{
+    color: var(--line); cursor:pointer; transition: color .12s, transform .12s;
+    user-select:none;
+  }
+  .star-picker .star:hover{ transform: scale(1.12); }
+  .star-picker .star.filled{ color: var(--gold); }
+  .star-rating-display{ display:inline-flex; gap:2px; font-size:16px; color: var(--line); }
+  .star-rating-display .star.filled{ color: var(--gold); }
+
+
   .field-pair{ display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   @media (max-width: 520px){ .field-pair{ grid-template-columns: 1fr; } }
 
@@ -452,6 +463,16 @@
   }
   .paste-zone:focus{ outline: none; border-color: var(--gold); color: var(--text-dim); }
   .paste-zone.drag-over{ border-color: var(--gold); background: var(--bg-raised); color: var(--text-dim); }
+  .file-upload-btn{
+    display:inline-flex; align-items:center; gap:6px; margin-top:8px; position:relative;
+    font-family:'IBM Plex Mono', monospace; font-size:11.5px; color: var(--gold);
+    border: 1px solid var(--gold); padding: 6px 10px; border-radius:2px; cursor:pointer;
+  }
+  .file-upload-btn:hover{ background: var(--bg-raised); }
+  .file-upload-btn input[type="file"]{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+    clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
   .image-lightbox{
     display:none; position:fixed; inset:0; z-index:500;
     background: rgba(10,15,20,0.9);
@@ -1034,6 +1055,7 @@
       <button role="tab" data-target="employes" id="tabBtnEmployes">Employés</button>
       <button role="tab" data-target="direction" id="tabBtnDirection">Direction</button>
       <button role="tab" data-target="particulier" id="tabBtnParticulier">Particulier</button>
+      <button role="tab" data-target="avis" id="tabBtnAvis">Avis</button>
     </nav>
     <div class="clearance">
       <span class="dot"></span> ACCÈS : <b id="sessionLabel">—</b>
@@ -1972,6 +1994,46 @@
       </div>
     </section>
 
+    <section class="panel" id="avis">
+      <div class="ad-grid" style="grid-template-columns: 1fr;">
+        <div class="ad-form">
+          <div class="requests-block">
+            <h2>Laisser un avis</h2>
+            <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Ton avis est visible par tout le monde (entreprises, employés, direction, particuliers).</p>
+            <div class="field" style="margin-bottom:14px;">
+              <label>Note</label>
+              <div class="star-picker" id="avisStarPicker">
+                <span class="star" data-value="1">★</span>
+                <span class="star" data-value="2">★</span>
+                <span class="star" data-value="3">★</span>
+                <span class="star" data-value="4">★</span>
+                <span class="star" data-value="5">★</span>
+              </div>
+            </div>
+            <div class="field" style="margin-bottom:14px;">
+              <label for="avisComment">Commentaire (optionnel)</label>
+              <textarea id="avisComment" maxlength="300" placeholder="Ton avis en quelques mots..."></textarea>
+              <div class="counter-row" id="avisCounterRow">0 / 300</div>
+            </div>
+            <button class="ad-submit" id="avisSubmitBtn">Envoyer mon avis</button>
+            <div id="avisSubmitResult"></div>
+          </div>
+
+          <div class="requests-block">
+            <h2>Tous les avis</h2>
+            <div class="kpi-row" style="margin-bottom:18px; grid-template-columns: 1fr;">
+              <div class="kpi">
+                <div class="label">Note moyenne</div>
+                <div class="value" id="avisAverageValue">—</div>
+                <div class="sub" id="avisAverageSub">Aucun avis pour le moment</div>
+              </div>
+            </div>
+            <div id="avisList"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <footer>SKY9 — Document interne, usage restreint aux membres autorisés</footer>
@@ -2527,6 +2589,7 @@
     window.scrollTo({top:0, behavior:'smooth'});
     if(id === 'direction'){ renderDirectionRequests(); renderCompanySummary(); renderOverviewStats(); renderLogs(); }
     if(id === 'employes'){ renderBroadcastPlanning(); renderDutyUI(); }
+    if(id === 'avis'){ renderReviewsList(); }
   }
 
   const planningPrevBtn = document.getElementById('planningPrevBtn');
@@ -2572,6 +2635,140 @@
   });
   buttons.forEach(btn => btn.addEventListener('click', () => showPanel(btn.dataset.target)));
 
+  /* ---------- Avis (accessible à tous) ---------- */
+  const LS_REVIEWS_KEY = 'echonews_reviews';
+  function loadReviews(){
+    try{
+      const raw = localStorage.getItem(LS_REVIEWS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    }catch(e){ return []; }
+  }
+  function saveReviews(list){
+    try{ localStorage.setItem(LS_REVIEWS_KEY, JSON.stringify(list)); }catch(e){}
+  }
+
+  const ROLE_LABELS_AVIS = { entreprise: 'Entreprise', employe: 'Employé', direction: 'Direction', particulier: 'Particulier' };
+
+  function starsHtml(rating, cssClass){
+    let html = '';
+    for(let i = 1; i <= 5; i++){
+      html += `<span class="star${i <= rating ? ' filled' : ''}">★</span>`;
+    }
+    return `<span class="${cssClass}">${html}</span>`;
+  }
+
+  let avisSelectedRating = 0;
+  const avisStarPicker = document.getElementById('avisStarPicker');
+  function renderAvisStarPicker(){
+    if(!avisStarPicker) return;
+    avisStarPicker.querySelectorAll('.star').forEach(star => {
+      star.classList.toggle('filled', parseInt(star.dataset.value, 10) <= avisSelectedRating);
+    });
+  }
+  if(avisStarPicker){
+    avisStarPicker.querySelectorAll('.star').forEach(star => {
+      star.addEventListener('click', () => {
+        avisSelectedRating = parseInt(star.dataset.value, 10);
+        renderAvisStarPicker();
+      });
+      star.addEventListener('mouseenter', () => {
+        const val = parseInt(star.dataset.value, 10);
+        avisStarPicker.querySelectorAll('.star').forEach(s => {
+          s.classList.toggle('filled', parseInt(s.dataset.value, 10) <= val);
+        });
+      });
+    });
+    avisStarPicker.addEventListener('mouseleave', renderAvisStarPicker);
+  }
+
+  const avisComment = document.getElementById('avisComment');
+  const avisCounterRow = document.getElementById('avisCounterRow');
+  if(avisComment){
+    avisComment.addEventListener('input', () => {
+      let arr = Array.from(avisComment.value);
+      if(arr.length > 300){ arr = arr.slice(0, 300); avisComment.value = arr.join(''); }
+      if(avisCounterRow) avisCounterRow.textContent = arr.length + ' / 300';
+    });
+  }
+
+  const avisSubmitBtn = document.getElementById('avisSubmitBtn');
+  if(avisSubmitBtn){
+    avisSubmitBtn.addEventListener('click', () => {
+      const resultEl = document.getElementById('avisSubmitResult');
+      if(!session){ return; }
+      if(avisSelectedRating < 1){
+        if(resultEl) resultEl.innerHTML = '<p style="color:var(--red); font-size:13px; margin-top:6px;">Choisis une note de 1 à 5 étoiles.</p>';
+        return;
+      }
+      const comment = avisComment ? avisComment.value.trim() : '';
+      const list = loadReviews();
+      list.unshift({
+        id: 'avis_' + Date.now(),
+        author: session.name,
+        role: session.role,
+        rating: avisSelectedRating,
+        comment,
+        ts: Date.now()
+      });
+      saveReviews(list);
+      addLog(`<b>${escapeHtml(session.name)}</b> a laissé un avis (${avisSelectedRating}★).`);
+
+      avisSelectedRating = 0;
+      renderAvisStarPicker();
+      if(avisComment) avisComment.value = '';
+      if(avisCounterRow) avisCounterRow.textContent = '0 / 300';
+      if(resultEl) resultEl.innerHTML = '<p style="color:var(--gold); font-size:13px; margin-top:6px;">✓ Merci pour ton avis !</p>';
+      renderReviewsList();
+    });
+  }
+
+  function renderReviewsList(){
+    const container = document.getElementById('avisList');
+    const avgValue = document.getElementById('avisAverageValue');
+    const avgSub = document.getElementById('avisAverageSub');
+    if(!container) return;
+    const list = loadReviews();
+
+    if(avgValue && avgSub){
+      if(list.length === 0){
+        avgValue.textContent = '—';
+        avgSub.textContent = 'Aucun avis pour le moment';
+      }else{
+        const avg = list.reduce((sum, r) => sum + r.rating, 0) / list.length;
+        avgValue.innerHTML = `${avg.toFixed(1)} ${starsHtml(Math.round(avg), 'star-rating-display')}`;
+        avgSub.textContent = `${list.length} avis au total`;
+      }
+    }
+
+    if(list.length === 0){
+      container.innerHTML = '<p class="requests-empty">Aucun avis pour le moment. Sois le premier à en laisser un !</p>';
+      return;
+    }
+
+    const isDirection = session && session.role === 'direction';
+    container.innerHTML = list.map(r => `
+      <div class="active-ad-card" data-review-id="${escapeHtml(r.id)}">
+        <div class="active-ad-top">
+          <span class="aacompany">${escapeHtml(r.author)} <span style="font-size:11px; color:var(--text-faint); font-weight:400;">(${escapeHtml(ROLE_LABELS_AVIS[r.role] || r.role)})</span></span>
+          ${starsHtml(r.rating, 'star-rating-display')}
+        </div>
+        ${r.comment ? `<div class="request-text">${escapeHtml(r.comment)}</div>` : ''}
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-faint); margin-top:6px;">${new Date(r.ts).toLocaleString('fr-FR')}</div>
+        ${isDirection ? `<div class="request-actions" style="margin-top:8px;"><button class="btn-refuse" data-action="delete-review" data-id="${escapeHtml(r.id)}">Supprimer</button></div>` : ''}
+      </div>
+    `).join('');
+
+    if(isDirection){
+      container.querySelectorAll('button[data-action="delete-review"]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          saveReviews(loadReviews().filter(r => r.id !== btn.dataset.id));
+          renderReviewsList();
+          showSavedIndicator();
+        });
+      });
+    }
+  }
+
   /* ---------- Sous-onglets (Direction / Employés) ---------- */
   document.querySelectorAll('.subtabs').forEach(nav => {
     const btns = nav.querySelectorAll('.subtab');
@@ -2604,7 +2801,7 @@
           else renderMyServiceRequests(val, val === 'journaliste' ? 'myJournalisteRequests' : val === 'photo' ? 'myPhotoRequests' : 'myInterviewRequests');
         }
         if(btn.dataset.subtarget === 'entRecharge'){ renderRechargeRecap(); renderMyRechargeRequests(); renderCompanyProfile(); renderMyDoneAds(); }
-        if(btn.dataset.subtarget === 'entPlanning'){ entPlanningDayOffset = 0; renderCompanyPlanning(); }
+        if(btn.dataset.subtarget === 'entPlanning'){ entPlanningDayOffset = 0; companyPlanningEditingAdId = null; renderCompanyPlanning(); }
         if(btn.dataset.subtarget === 'entJournaliste') renderMyServiceRequests('journaliste', 'myJournalisteRequests');
         if(btn.dataset.subtarget === 'entPhoto') renderMyServiceRequests('photo', 'myPhotoRequests');
         if(btn.dataset.subtarget === 'entInterview') renderMyServiceRequests('interview', 'myInterviewRequests');
@@ -2953,7 +3150,7 @@
         ? ''
         : (r.paymentProof
             ? `<div style="margin-top:10px;"><img src="${r.paymentProof}" class="proof-thumb" style="max-width:160px; max-height:120px; border:1px solid var(--line); display:block;"><p style="font-size:11.5px; color:var(--emerald); margin-top:4px;">✓ Justificatif envoyé, en attente de validation par la direction.</p></div>`
-            : `<div class="paste-zone" data-id="${r.id}" tabindex="0">Colle une capture (Ctrl+V) ou glisse une image ici pour prouver le paiement</div>`
+            : `<div class="paste-zone" data-id="${r.id}" tabindex="0">Colle une capture (Ctrl+V) ou glisse une image ici pour prouver le paiement<br><label class="file-upload-btn">📁 Choisir une photo<input type="file" accept="image/*" class="proof-file-input" data-id="${r.id}"></label></div>`
           );
       return `
       <div class="history-item">
@@ -2997,6 +3194,13 @@
         const file = e.dataTransfer.files && e.dataTransfer.files[0];
         handleFile(file);
       });
+      const fileInput = zone.querySelector('.proof-file-input');
+      if(fileInput){
+        fileInput.addEventListener('click', (e) => e.stopPropagation());
+        fileInput.addEventListener('change', () => {
+          handleFile(fileInput.files && fileInput.files[0]);
+        });
+      }
     });
   }
 
@@ -3248,11 +3452,29 @@
           adjustBalance(list[idx].company, list[idx].count);
           addLog(`Solde de <b>${escapeHtml(list[idx].company)}</b> rechargé de ${list[idx].count} annonce(s) (nouveau solde : ${getBalance(list[idx].company)}).`);
         }
+
+        // Le montant validé compte immédiatement dans le Revenu / semaine et l'Impôt
+        // (comme une facturation manuelle, mais automatique à l'acceptation).
+        const payments = loadPayments();
+        payments.unshift({
+          id: 'pay_' + Date.now(),
+          company: list[idx].company,
+          amount: list[idx].total,
+          ts: Date.now(),
+          by: session ? session.name : 'Direction',
+          requestIds: [list[idx].id],
+          removedAdjustments: [],
+          manual: false,
+          label: list[idx].isRecharge ? 'Rechargement de solde' : 'Demande d\'annonce validée'
+        });
+        savePayments(payments);
+
         addLogEntry(list[idx]);
         renderDirectionRequests();
         renderCompanySummary();
         renderBroadcastPlanning();
         renderOverviewStats();
+        if(typeof renderTax === 'function') renderTax();
       });
     });
 
@@ -3309,35 +3531,9 @@
     saveEmpDiffusionHistory(list);
   }
 
-  // ---------- Nettoyage automatique des photos justificatives (après 1 semaine) ----------
-  // Le badge "Diffusée" et toutes les infos (qui, quand) restent pour toujours ;
-  // seule l'image en elle-même est retirée après 7 jours pour ne pas alourdir
-  // indéfiniment le stockage (localStorage + Firestore).
-  const PROOF_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-  function cleanupOldProofImages(){
-    const now = Date.now();
-
-    let changed = false;
-    const completedMap = loadCompleted();
-    Object.keys(completedMap).forEach(occId => {
-      const entry = completedMap[occId];
-      if(entry && entry.proof && entry.ts && (now - entry.ts > PROOF_MAX_AGE_MS)){
-        entry.proof = null;
-        changed = true;
-      }
-    });
-    if(changed) saveCompleted(completedMap);
-
-    changed = false;
-    const historyList = loadEmpDiffusionHistory();
-    historyList.forEach(h => {
-      if(h && h.proof && h.ts && (now - h.ts > PROOF_MAX_AGE_MS)){
-        h.proof = null;
-        changed = true;
-      }
-    });
-    if(changed) saveEmpDiffusionHistory(historyList);
-  }
+  // Les photos justificatives sont désormais permanentes : aucun nettoyage
+  // automatique ne les supprime plus (elles restent tant qu'un employé/la
+  // direction ne les retire pas manuellement).
 
   const LS_COMPANY_HISTORY_KEY = 'echonews_company_history';
   function loadCompanyHistory(){
@@ -3547,6 +3743,7 @@
 
   function renderBroadcastPlanning(){
     const container = document.getElementById('broadcastPlanning');
+    const savedScrollTop = container ? container.scrollTop : 0;
     const prevBtn = document.getElementById('planningPrevBtn');
     const todayBtn = document.getElementById('planningTodayBtn');
     if(prevBtn) prevBtn.disabled = planningDayOffset <= 0;
@@ -3605,6 +3802,7 @@
 
     if(dayOcc.length === 0 && acceptedServiceToday.length === 0){
       container.innerHTML = header + '<p class="requests-empty">Aucune annonce programmée sur cette période de diffusion.</p>';
+      container.scrollTop = savedScrollTop;
       return;
     }
 
@@ -3646,7 +3844,7 @@
       const proofHtml = isDone
         ? (completedMap[o.id].proof
             ? `<img src="${completedMap[o.id].proof}" class="proof-thumb" style="max-width:120px; max-height:90px; border:1px solid var(--line); display:block; margin-top:6px;">`
-            : (ownedByMe ? `<div class="paste-zone" data-occ-proof="${o.id}" tabindex="0" style="margin-top:6px; max-width:280px;">Colle (Ctrl+V) ou glisse une capture de l'annonce diffusée</div>` : ''))
+            : (ownedByMe ? `<div class="paste-zone" data-occ-proof="${o.id}" tabindex="0" style="margin-top:6px; max-width:280px;">Colle (Ctrl+V) ou glisse une capture de l'annonce diffusée<br><label class="file-upload-btn">📁 Choisir une photo<input type="file" accept="image/*" class="proof-file-input" data-occ-proof-input="${o.id}"></label></div>` : ''))
         : '';
 
       const isPast = isToday && occTs < nowTs;
@@ -3672,6 +3870,7 @@
     const serviceRows = buildServiceRows();
 
     container.innerHTML = header + `<div class="schedule-grid">${serviceRows}${rows}</div>`;
+    container.scrollTop = savedScrollTop;
 
     container.querySelectorAll('input[type="checkbox"][data-occ]').forEach(cb => {
       cb.addEventListener('change', () => {
@@ -3746,17 +3945,32 @@
         const file = e.dataTransfer.files && e.dataTransfer.files[0];
         handleFile(file);
       });
+      const fileInput = zone.querySelector('.proof-file-input');
+      if(fileInput){
+        fileInput.addEventListener('click', (e) => e.stopPropagation());
+        fileInput.addEventListener('change', () => {
+          handleFile(fileInput.files && fileInput.files[0]);
+        });
+      }
     });
   }
 
   /* ---------- Planning propre à chaque entreprise ---------- */
   let entPlanningDayOffset = 0;
+  let companyPlanningEditingAdId = null;
 
   function renderCompanyPlanning(){
     const container = document.getElementById('entBroadcastPlanning');
+    if(!container || !session || session.role !== 'entreprise') return;
+    if(companyPlanningEditingAdId !== null){
+      // Une modification est en cours : on ne touche pas à l'affichage pour ne
+      // pas effacer ce que l'entreprise est en train de taper (le rafraîchissement
+      // automatique du solde ne doit pas interrompre une saisie en cours).
+      return;
+    }
+    const savedScrollTop = container.scrollTop;
     const prevBtn = document.getElementById('entPlanningPrevBtn');
     const todayBtn = document.getElementById('entPlanningTodayBtn');
-    if(!container || !session || session.role !== 'entreprise') return;
     if(prevBtn) prevBtn.disabled = entPlanningDayOffset <= 0;
     if(todayBtn) todayBtn.disabled = entPlanningDayOffset === 0;
 
@@ -3782,6 +3996,7 @@
 
     if(allOcc.length === 0){
       container.innerHTML = header + '<p class="requests-empty">Aucune annonce programmée sur cette période de diffusion.</p>';
+      container.scrollTop = savedScrollTop;
       return;
     }
 
@@ -3814,6 +4029,7 @@
     }).join('');
 
     container.innerHTML = header + `<div class="schedule-grid">${rows}</div>`;
+    container.scrollTop = savedScrollTop;
 
     container.querySelectorAll('.ent-edit-ad-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -3823,7 +4039,11 @@
         if(!zone) return;
         const isOpen = zone.style.display !== 'none';
         container.querySelectorAll('.ent-edit-zone').forEach(z => z.style.display = 'none');
-        if(isOpen) return;
+        if(isOpen){
+          companyPlanningEditingAdId = null;
+          return;
+        }
+        companyPlanningEditingAdId = adId;
 
         const list = loadRequests();
         const ad = list.find(r => r.id === adId);
@@ -3872,6 +4092,7 @@
           logCompanyHistory(freshAd.company, 'ad_edited', `Texte de l'annonce modifié par l'entreprise`, { by });
           addLog(`<b>${escapeHtml(freshAd.company)}</b> a modifié le texte d'une de ses annonces.`);
           zone.querySelector('.ent-edit-result').innerHTML = '<p style="color:var(--gold); font-size:12.5px; margin-top:6px;">✓ Modifications enregistrées.</p>';
+          companyPlanningEditingAdId = null;
           setTimeout(() => renderCompanyPlanning(), 900);
           showSavedIndicator();
         });
@@ -5530,11 +5751,6 @@
   // navigateurs/contextes), on revérifie le solde à intervalle régulier.
   setInterval(refreshEntrepriseLiveData, 4000);
 
-  // Nettoyage des vieilles photos justificatives : une fois la synchro cloud faite
-  // (voir plus bas), puis toutes les heures tant que la page reste ouverte — pour
-  // ne jamais nettoyer avant d'avoir reçu les données à jour et écraser le résultat.
-  setInterval(cleanupOldProofImages, 60 * 60 * 1000);
-
   // ==================================================================
   // ========== SYNCHRONISATION AVEC UNE VRAIE BASE DE DONNÉES =========
   // ==================================================================
@@ -5584,7 +5800,7 @@
     'echonews_duty_totals', 'echonews_grades', 'echonews_employee_grades', 'echonews_week_reset_marker',
     'echonews_company_prices', 'echonews_company_balances', 'echonews_grade_permissions',
     'echonews_week_expenses', 'echonews_revenue_reset_marker', 'echonews_debt_adjustments',
-    'echonews_company_payments'
+    'echonews_company_payments', 'echonews_reviews'
   ];
 
   let cloudDb = null;
@@ -5631,7 +5847,7 @@
           'renderEmpIdentifiantsList', 'renderSalary', 'renderBroadcastPlanning',
           'renderMyRequests', 'renderMyRechargeRequests', 'renderCompanyProfile', 'renderCompanyPlanning', 'renderMyDoneAds',
           'renderPricingPicker', 'renderCreditCompanyPicker', 'renderManualInvoicePicker', 'renderTax',
-          'renderOverviewStats', 'renderWeeklyCompanyRecap', 'applySession'
+          'renderOverviewStats', 'renderWeeklyCompanyRecap', 'renderReviewsList', 'applySession'
         ];
         fns.forEach(name => {
           try{ if(typeof window[name] === 'function') window[name](); }catch(e){}
@@ -5649,7 +5865,6 @@
           });
           cloudApplyingRemote = false;
           cloudReady = true;
-          cleanupOldProofImages();
           refreshAllViewsFromCloud();
         }else{
           // Aucune donnée en ligne pour l'instant : on envoie l'état local actuel
