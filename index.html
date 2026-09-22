@@ -1143,6 +1143,12 @@
           <button id="entPlanningNextBtn" type="button">Jour suivant ▶</button>
         </div>
         <div id="entBroadcastPlanning"><p class="requests-empty">Aucune annonce acceptée pour le moment.</p></div>
+
+        <div class="requests-block" style="margin-top:24px;">
+          <h2>Historique des annonces diffusées</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Toutes vos annonces déjà diffusées, avec la date, l'heure exacte, et la photo envoyée par l'employé si disponible.</p>
+          <div id="myDoneAdsPlanning"><p class="requests-empty">Aucune annonce diffusée pour le moment.</p></div>
+        </div>
       </div>
 
       <div class="subpanel active" id="entDemandeHub">
@@ -2932,7 +2938,7 @@
           else renderMyServiceRequests(val, val === 'journaliste' ? 'myJournalisteRequests' : val === 'photo' ? 'myPhotoRequests' : 'myInterviewRequests');
         }
         if(btn.dataset.subtarget === 'entRecharge'){ renderRechargeRecap(); renderMyRechargeRequests(); renderCompanyProfile(); renderMyDoneAds(); }
-        if(btn.dataset.subtarget === 'entPlanning'){ entPlanningDayOffset = 0; companyPlanningEditingAdId = null; renderCompanyPlanning(); }
+        if(btn.dataset.subtarget === 'entPlanning'){ entPlanningDayOffset = 0; companyPlanningEditingAdId = null; renderCompanyPlanning(); renderMyDoneAds(); }
         if(btn.dataset.subtarget === 'entJournaliste') renderMyServiceRequests('journaliste', 'myJournalisteRequests');
         if(btn.dataset.subtarget === 'entPhoto') renderMyServiceRequests('photo', 'myPhotoRequests');
         if(btn.dataset.subtarget === 'entInterview') renderMyServiceRequests('interview', 'myInterviewRequests');
@@ -3497,46 +3503,38 @@
   wireServiceForm('interview', 'partInterviewDesc', 'partInterviewDate', 'partInterviewHeure', 'partInterviewLieu', 'submitPartInterviewBtn', 'partInterviewConfirm', 'myPartInterviewRequests');
 
   function renderMyDoneAds(){
-    const container = document.getElementById('myDoneAds');
-    if(!container || !session) return;
+    if(!session) return;
+    // Source : l'historique permanent des diffusions (jamais affecté si l'annonce
+    // d'origine est ensuite supprimée), pas le planning recalculé à la volée —
+    // ainsi l'historique ne disparaît jamais, même après suppression de l'annonce.
+    const doneItems = loadEmpDiffusionHistory()
+      .filter(h => h.company === session.name)
+      .slice()
+      .sort((a, b) => (b.ts || 0) - (a.ts || 0));
 
-    const myAccepted = loadRequests().filter(r => r.company === session.name && r.status === 'accepted');
-    const completedMap = loadCompleted();
+    const html = doneItems.length === 0
+      ? '<p class="requests-empty">Aucune annonce diffusée pour le moment.</p>'
+      : doneItems.map(item => {
+          const dateObj = item.date && item.date !== '—' ? new Date(item.date + 'T00:00:00') : null;
+          let dateLabel = dateObj ? dateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long' }) : '';
+          if(dateLabel) dateLabel = dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1);
+          return `
+            <div class="history-item">
+              <div>
+                <div class="htxt">${escapeHtml(item.text)}</div>
+                <div class="hmeta" style="margin-top:4px;">${escapeHtml(dateLabel)}${dateLabel ? ' — ' : ''}${escapeHtml(item.time || '')}</div>
+                ${item.proof ? `<img src="${item.proof}" class="proof-thumb" style="max-width:140px; max-height:100px; border:1px solid var(--line); display:block; margin-top:6px;">` : '<p style="font-size:11.5px; color:var(--text-faint); margin-top:6px;">Aucun justificatif photo envoyé</p>'}
+              </div>
+              <div class="hmeta">Diffusée le ${escapeHtml(item.at || '')}</div>
+              <span class="badge accepted">Diffusée</span>
+            </div>
+          `;
+        }).join('');
 
-    let doneItems = [];
-    myAccepted.forEach(ad => {
-      const occs = generateSchedule(ad);
-      occs.forEach(o => {
-        const done = completedMap[o.id];
-        if(done){
-          doneItems.push({ text: ad.text, date: o.date, time: o.time, at: done.at, ts: done.ts, proof: done.proof });
-        }
-      });
+    ['myDoneAds', 'myDoneAdsPlanning'].forEach(id => {
+      const el = document.getElementById(id);
+      if(el) el.innerHTML = html;
     });
-
-    if(doneItems.length === 0){
-      container.innerHTML = '<p class="requests-empty">Aucune annonce diffusée pour le moment.</p>';
-      return;
-    }
-
-    doneItems.sort((a, b) => b.ts - a.ts);
-
-    container.innerHTML = doneItems.map(item => {
-      const dateObj = new Date(item.date + 'T00:00:00');
-      let dateLabel = dateObj.toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long' });
-      dateLabel = dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1);
-      return `
-        <div class="history-item">
-          <div>
-            <div class="htxt">${escapeHtml(item.text)}</div>
-            <div class="hmeta" style="margin-top:4px;">${dateLabel} — ${item.time}</div>
-            ${item.proof ? `<img src="${item.proof}" class="proof-thumb" style="max-width:140px; max-height:100px; border:1px solid var(--line); display:block; margin-top:6px;">` : '<p style="font-size:11.5px; color:var(--text-faint); margin-top:6px;">Aucun justificatif photo envoyé</p>'}
-          </div>
-          <div class="hmeta">Diffusée le ${item.at}</div>
-          <span class="badge accepted">Diffusée</span>
-        </div>
-      `;
-    }).join('');
   }
 
   function renderMyRequests(containerId){
@@ -3864,6 +3862,10 @@
     // Occurrences retirées par l'entreprise (annonce manquée non diffusée, supprimée
     // depuis son planning) : elles ne doivent plus jamais apparaître nulle part.
     const excludedOccIds = (ad.excludedOccIds && ad.excludedOccIds.length) ? new Set(ad.excludedOccIds) : null;
+    // Textes modifiés par l'entreprise annonce par annonce (une occurrence précise
+    // uniquement) : ne remplacent jamais le texte des autres occurrences de la
+    // même demande.
+    const overrides = ad.occTextOverrides || null;
 
     const occurrences = [];
     while(cursor <= hardCap && occurrences.length < ad.count){
@@ -3874,12 +3876,15 @@
           // Plusieurs textes différents : ils tournent en boucle (texte 1, 2, 3, puis
           // retour au texte 1...) pour remplir le nombre total d'annonces demandé,
           // selon la même fréquence que d'habitude.
+          const occId = ad.id + '_' + occurrences.length;
+          const defaultText = hasMultiTexts ? ad.texts[occurrences.length % ad.texts.length] : ad.text;
+          const effectiveText = (overrides && Object.prototype.hasOwnProperty.call(overrides, occId)) ? overrides[occId] : defaultText;
           occurrences.push({
-            id: ad.id + '_' + occurrences.length,
+            id: occId,
             date: toISODate(cursor),
             time: minutesToLabel(startM + offset),
             sortMinutes: startM + offset,
-            ad: hasMultiTexts ? Object.assign({}, ad, { text: ad.texts[occurrences.length % ad.texts.length] }) : ad
+            ad: Object.assign({}, ad, { text: effectiveText })
           });
         }
       }
@@ -4315,6 +4320,11 @@
       const doneLabel = done
         ? `<span class="badge accepted" style="margin-left:8px;">✓ Diffusée${done.ts ? ' à ' + new Date(done.ts).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}) : ''}</span>`
         : (isPast ? `<span class="badge hidden" style="margin-left:8px;">Non diffusée</span>` : '');
+      const proofHtml = done
+        ? (done.proof
+            ? `<img src="${done.proof}" class="proof-thumb" style="max-width:160px; max-height:120px; border:1px solid var(--line); display:block; margin-top:6px;">`
+            : `<p style="font-size:11.5px; color:var(--text-faint); margin-top:6px;">Aucune photo envoyée par l'employé pour cette diffusion.</p>`)
+        : '';
       const lockMsg = isPast
         ? "Modification impossible : cette heure de diffusion est déjà passée."
         : "Modification impossible : diffusion dans moins de 5 minutes.";
@@ -4327,12 +4337,13 @@
         <div class="schedule-content">
           <span class="schedule-chip">${escapeHtml(o.ad.text)}</span>
           ${doneLabel}
+          ${proofHtml}
           <div class="request-actions" style="margin-top:8px;">
-            <button type="button" class="ad-reset ent-edit-ad-btn" data-ad-id="${escapeHtml(o.ad.id)}" data-occ-ts="${occTs}" ${editLocked ? `disabled title="${lockMsg}"` : ''}>Modifier cette annonce</button>
+            <button type="button" class="ad-reset ent-edit-occ-btn" data-ad-id="${escapeHtml(o.ad.id)}" data-occ-id="${escapeHtml(o.id)}" data-occ-ts="${occTs}" ${editLocked ? `disabled title="${lockMsg}"` : ''}>Modifier cette annonce</button>
             ${canDeleteMissed ? `<button type="button" class="btn-refuse ent-delete-occ-btn" data-ad-id="${escapeHtml(o.ad.id)}" data-occ-id="${escapeHtml(o.id)}">🗑️ Supprimer (non diffusée) — récupère le crédit</button>` : ''}
           </div>
           ${editLocked ? `<p style="font-size:11.5px; color:var(--text-faint); margin-top:6px;">${lockMsg}</p>` : ''}
-          <div class="ent-edit-zone" data-ad-edit-zone="${escapeHtml(o.ad.id)}" style="display:none; margin-top:10px;"></div>
+          <div class="ent-edit-zone" data-occ-edit-zone="${escapeHtml(o.id)}" style="display:none; margin-top:10px;"></div>
         </div>
       </div>
     `;
@@ -4361,11 +4372,15 @@
       });
     });
 
-    container.querySelectorAll('.ent-edit-ad-btn').forEach(btn => {
+    // Modification annonce par annonce : chaque occurrence a son propre bouton,
+    // son propre formulaire, et sa propre sauvegarde — modifier l'une ne touche
+    // jamais le texte des autres occurrences de la même demande, ni le solde.
+    container.querySelectorAll('.ent-edit-occ-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         if(btn.disabled) return;
         const adId = btn.dataset.adId;
-        const zone = container.querySelector(`.ent-edit-zone[data-ad-edit-zone="${adId}"]`);
+        const occId = btn.dataset.occId;
+        const zone = container.querySelector(`.ent-edit-zone[data-occ-edit-zone="${occId}"]`);
         if(!zone) return;
         const isOpen = zone.style.display !== 'none';
         container.querySelectorAll('.ent-edit-zone').forEach(z => z.style.display = 'none');
@@ -4373,67 +4388,62 @@
           companyPlanningEditingAdId = null;
           return;
         }
-        companyPlanningEditingAdId = adId;
+        companyPlanningEditingAdId = occId;
 
         const list = loadRequests();
         const ad = list.find(r => r.id === adId);
         if(!ad) return;
+        const currentText = (ad.occTextOverrides && ad.occTextOverrides[occId] !== undefined)
+          ? ad.occTextOverrides[occId]
+          : (ad.texts && ad.texts.length > 1 ? ad.texts[0] : ad.text);
 
-        const hasMulti = ad.texts && ad.texts.length > 1;
-        const textsToEdit = hasMulti ? ad.texts : [ad.text];
         zone.style.display = 'block';
-        zone.innerHTML = textsToEdit.map((t, i) => `
+        zone.innerHTML = `
           <div class="field" style="margin-bottom:10px;">
-            <label>${hasMulti ? `Texte ${i+1}` : "Texte de l'annonce"} (150 caractères max)</label>
-            <textarea class="ent-edit-text-input" data-idx="${i}" maxlength="150">${escapeHtml(t)}</textarea>
-            <div class="counter-row">${Array.from(t).length} / 150</div>
+            <label>Texte de cette annonce uniquement (150 caractères max)</label>
+            <textarea class="ent-edit-occ-text-input" maxlength="150">${escapeHtml(currentText)}</textarea>
+            <div class="counter-row">${Array.from(currentText).length} / 150</div>
           </div>
-        `).join('') + `
-          <button type="button" class="ad-submit ent-edit-save-btn">Enregistrer les modifications</button>
+          <button type="button" class="ad-submit ent-edit-occ-save-btn">Enregistrer (cette annonce uniquement)</button>
           <div class="ent-edit-result"></div>
         `;
 
-        zone.querySelectorAll('.ent-edit-text-input').forEach(ta => {
-          ta.addEventListener('input', () => {
-            let arr = Array.from(ta.value);
-            if(arr.length > 150){ arr = arr.slice(0, 150); ta.value = arr.join(''); }
-            ta.nextElementSibling.textContent = arr.length + ' / 150';
-          });
+        const ta = zone.querySelector('.ent-edit-occ-text-input');
+        ta.addEventListener('input', () => {
+          let arr = Array.from(ta.value);
+          if(arr.length > 150){ arr = arr.slice(0, 150); ta.value = arr.join(''); }
+          ta.nextElementSibling.textContent = arr.length + ' / 150';
         });
 
-        zone.querySelector('.ent-edit-save-btn').addEventListener('click', () => {
+        zone.querySelector('.ent-edit-occ-save-btn').addEventListener('click', () => {
           // Sécurité : on revérifie l'heure exacte de diffusion au moment d'enregistrer,
           // pas seulement à l'ouverture du formulaire (cas où l'entreprise a laissé le
-          // formulaire ouvert pendant que le délai de 5 minutes s'écoulait).
+          // formulaire ouvert pendant que le délai s'écoulait).
           const occTs = parseInt(btn.dataset.occTs, 10);
           if(!isNaN(occTs) && (occTs - Date.now()) <= 5 * 60 * 1000){
-            zone.querySelector('.ent-edit-result').innerHTML = '<p style="color:var(--red); font-size:12.5px; margin-top:6px;">Trop tard : cette annonce est maintenant verrouillée (moins de 5 minutes avant sa diffusion).</p>';
+            zone.querySelector('.ent-edit-result').innerHTML = '<p style="color:var(--red); font-size:12.5px; margin-top:6px;">Trop tard : cette annonce est maintenant verrouillée (moins de 5 minutes avant sa diffusion, ou déjà diffusée).</p>';
             companyPlanningEditingAdId = null;
             setTimeout(() => renderCompanyPlanning(), 900);
             return;
           }
-          const inputs = Array.from(zone.querySelectorAll('.ent-edit-text-input'));
-          // On retronque toujours à 150 caractères exactement au moment d'enregistrer,
-          // quel que soit ce qui a pu être saisi ou collé dans le champ.
-          const newTexts = inputs.map(ta => Array.from(ta.value.trim()).slice(0, 150).join(''));
-          if(newTexts.some(t => !t)){
-            zone.querySelector('.ent-edit-result').innerHTML = '<p style="color:var(--red); font-size:12.5px; margin-top:6px;">Aucun texte ne peut être vide.</p>';
+          // On retronque toujours à 150 caractères exactement au moment d'enregistrer.
+          const newText = Array.from(ta.value.trim()).slice(0, 150).join('');
+          if(!newText){
+            zone.querySelector('.ent-edit-result').innerHTML = '<p style="color:var(--red); font-size:12.5px; margin-top:6px;">Le texte ne peut pas être vide.</p>';
             return;
           }
           const freshList = loadRequests();
           const freshAd = freshList.find(r => r.id === adId);
           if(!freshAd) return;
-          if(hasMulti){
-            freshAd.texts = newTexts;
-            freshAd.text = newTexts.map((t, i) => `${i+1}) ${t}`).join('  •  ');
-          }else{
-            freshAd.text = newTexts[0];
-          }
+          // Sauvegarde propre à CETTE occurrence uniquement : les autres annonces
+          // de la même demande (et leur propre modification éventuelle) ne bougent pas.
+          if(!freshAd.occTextOverrides) freshAd.occTextOverrides = {};
+          freshAd.occTextOverrides[occId] = newText;
           saveRequests(freshList);
           const by = session ? session.name : 'Entreprise';
-          logCompanyHistory(freshAd.company, 'ad_edited', `Texte de l'annonce modifié par l'entreprise`, { by });
-          addLog(`<b>${escapeHtml(freshAd.company)}</b> a modifié le texte d'une de ses annonces.`);
-          zone.querySelector('.ent-edit-result').innerHTML = '<p style="color:var(--gold); font-size:12.5px; margin-top:6px;">✓ Modifications enregistrées.</p>';
+          logCompanyHistory(freshAd.company, 'ad_edited', `Texte d'une annonce individuelle modifié par l'entreprise`, { by });
+          addLog(`<b>${escapeHtml(freshAd.company)}</b> a modifié le texte d'une annonce individuelle (les autres annonces liées ne sont pas affectées).`);
+          zone.querySelector('.ent-edit-result').innerHTML = '<p style="color:var(--gold); font-size:12.5px; margin-top:6px;">✓ Modification enregistrée pour cette annonce uniquement.</p>';
           companyPlanningEditingAdId = null;
           setTimeout(() => renderCompanyPlanning(), 900);
           showSavedIndicator();
