@@ -1361,16 +1361,21 @@
         <div class="id-subpanel active" id="profilVue">
           <div class="requests-block">
             <h2>Profil de l'entreprise</h2>
-            <div class="kpi-row" style="grid-template-columns: repeat(2, 1fr); margin-bottom:20px;">
+            <div class="kpi-row" style="grid-template-columns: repeat(3, 1fr); margin-bottom:20px;">
               <div class="kpi">
                 <div class="label">Entreprise connectée</div>
                 <div class="value" id="rechargeCompanyTagName" style="font-size:20px;">—</div>
                 <div class="sub">identifiant de connexion</div>
               </div>
               <div class="kpi">
-                <div class="label">Solde d'annonces restant</div>
-                <div class="value" id="profileBalance">0</div>
-                <div class="sub">déduit à chaque diffusion</div>
+                <div class="label">Annonces postables</div>
+                <div class="value" id="profilePostable">0</div>
+                <div class="sub">disponibles pour une nouvelle demande</div>
+              </div>
+              <div class="kpi">
+                <div class="label">Annonces postées</div>
+                <div class="value" id="profilePosted">0</div>
+                <div class="sub">déjà créées, pas encore diffusées</div>
               </div>
             </div>
             <p style="font-size:13px; color:var(--text-dim); margin:-4px 0 0;">RIB pour le paiement des annonces : <b style="color:var(--gold); font-family:'IBM Plex Mono',monospace;">YKJEMS9FZA</b></p>
@@ -2051,7 +2056,7 @@
               <input type="number" id="creditAmountInput" min="1" step="1" placeholder="Ex : 10">
             </div>
           </div>
-          <p style="font-size:13px; color:var(--text-dim); margin:0 0 14px;">Solde actuel : <b id="creditCompanyBalance" style="color:var(--gold);">0</b> annonce(s)</p>
+          <p style="font-size:13px; color:var(--text-dim); margin:0 0 14px;">Solde postable actuel : <b id="creditCompanyBalance" style="color:var(--gold);">0</b> annonce(s)</p>
           <button class="ad-submit" id="creditCompanyBtn" style="margin-bottom:10px;">Ajouter au solde</button>
           <div id="creditCompanyResult"></div>
         </div>
@@ -3094,7 +3099,7 @@
       if(panelEl) panelEl.textContent = formatUSD(unitPrice);
 
       if(cfg.balanceMode){
-        const balance = session ? getBalance(session.name) : 0;
+        const balance = session ? getCompanyPostableCount(session.name) : 0;
         els.recapTotal.textContent = balance + ' annonce(s)';
         const warnEl = cfg.balanceWarningId ? document.getElementById(cfg.balanceWarningId) : null;
         if(warnEl){
@@ -3177,7 +3182,7 @@
       let count = getEffectiveCount();
 
       if(cfg.balanceMode){
-        const balance = session ? getBalance(session.name) : 0;
+        const balance = session ? getCompanyPostableCount(session.name) : 0;
         if(balance < count){
           updateTotal();
           const warnEl = cfg.balanceWarningId ? document.getElementById(cfg.balanceWarningId) : null;
@@ -3621,7 +3626,7 @@
         saveRequests(list);
         if(list[idx].isRecharge){
           adjustBalance(list[idx].company, list[idx].count);
-          addLog(`Solde de <b>${escapeHtml(list[idx].company)}</b> rechargé de ${list[idx].count} annonce(s) (nouveau solde : ${getBalance(list[idx].company)}).`);
+          addLog(`Solde de <b>${escapeHtml(list[idx].company)}</b> rechargé de ${list[idx].count} annonce(s) (nouveau solde postable : ${getCompanyPostableCount(list[idx].company)}).`);
         }
 
         // Le montant validé compte immédiatement dans le Revenu / semaine et l'Impôt
@@ -3856,6 +3861,9 @@
     const hardCap = new Date(cursor.getTime() + 730 * 86400000);
 
     const allowedDays = (ad.days && ad.days.length) ? ad.days : null;
+    // Occurrences retirées par l'entreprise (annonce manquée non diffusée, supprimée
+    // depuis son planning) : elles ne doivent plus jamais apparaître nulle part.
+    const excludedOccIds = (ad.excludedOccIds && ad.excludedOccIds.length) ? new Set(ad.excludedOccIds) : null;
 
     const occurrences = [];
     while(cursor <= hardCap && occurrences.length < ad.count){
@@ -3877,7 +3885,7 @@
       }
       cursor = new Date(cursor.getTime() + 86400000);
     }
-    return occurrences;
+    return excludedOccIds ? occurrences.filter(o => !excludedOccIds.has(o.id)) : occurrences;
   }
 
   // Empêche que deux annonces tombent exactement sur le même horaire le même jour :
@@ -4310,6 +4318,9 @@
       const lockMsg = isPast
         ? "Modification impossible : cette heure de diffusion est déjà passée."
         : "Modification impossible : diffusion dans moins de 5 minutes.";
+      // Une annonce manquée (heure passée, jamais diffusée) peut être supprimée par
+      // l'entreprise elle-même pour récupérer le crédit correspondant.
+      const canDeleteMissed = !done && isPast;
       return `
       <div class="schedule-row has-ads">
         <div class="schedule-time">${o.time}</div>
@@ -4318,6 +4329,7 @@
           ${doneLabel}
           <div class="request-actions" style="margin-top:8px;">
             <button type="button" class="ad-reset ent-edit-ad-btn" data-ad-id="${escapeHtml(o.ad.id)}" data-occ-ts="${occTs}" ${editLocked ? `disabled title="${lockMsg}"` : ''}>Modifier cette annonce</button>
+            ${canDeleteMissed ? `<button type="button" class="btn-refuse ent-delete-occ-btn" data-ad-id="${escapeHtml(o.ad.id)}" data-occ-id="${escapeHtml(o.id)}">🗑️ Supprimer (non diffusée) — récupère le crédit</button>` : ''}
           </div>
           ${editLocked ? `<p style="font-size:11.5px; color:var(--text-faint); margin-top:6px;">${lockMsg}</p>` : ''}
           <div class="ent-edit-zone" data-ad-edit-zone="${escapeHtml(o.ad.id)}" style="display:none; margin-top:10px;"></div>
@@ -4328,6 +4340,26 @@
 
     container.innerHTML = header + `<div class="schedule-grid">${rows}</div>`;
     container.scrollTop = savedScrollTop;
+
+    container.querySelectorAll('.ent-delete-occ-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const adId = btn.dataset.adId;
+        const occId = btn.dataset.occId;
+        const ok = window.confirm("Supprimer cette annonce non diffusée ? Elle disparaîtra du planning et le crédit vous sera rendu.");
+        if(!ok) return;
+        const list = loadRequests();
+        const ad = list.find(r => r.id === adId);
+        if(!ad) return;
+        if(!ad.excludedOccIds) ad.excludedOccIds = [];
+        if(!ad.excludedOccIds.includes(occId)) ad.excludedOccIds.push(occId);
+        saveRequests(list);
+        addLog(`<b>${escapeHtml(ad.company)}</b> a supprimé une annonce non diffusée de son planning (crédit récupéré).`);
+        logCompanyHistory(ad.company, 'ad_refuse', `Annonce non diffusée supprimée par l'entreprise : ${ad.text}`, { by: session.name });
+        renderCompanyPlanning();
+        renderCompanyProfile();
+        if(typeof renderBroadcastPlanning === 'function') renderBroadcastPlanning();
+      });
+    });
 
     container.querySelectorAll('.ent-edit-ad-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -5135,10 +5167,41 @@
     if(entrepriseAdForm) entrepriseAdForm.updateTotal();
   }
 
+  // ---------- Annonces "postables" vs "postées" ----------
+  // Le solde brut existant (getBalance) n'est JAMAIS modifié par cette logique :
+  // il continue de baisser d'1 exactement comme avant à chaque diffusion cochée,
+  // et d'augmenter lors d'un rechargement. On en dérive simplement deux lectures :
+  //   - "postées"  = annonces déjà créées (demande acceptée) mais pas encore
+  //                  diffusées par un employé, calculé à partir des demandes
+  //                  acceptées existantes et de la carte des diffusions cochées ;
+  //   - "postables" = solde brut - postées (ce qui reste réellement disponible
+  //                  pour une NOUVELLE demande).
+  function getCompanyPostedCount(company){
+    const ads = loadRequests().filter(r => r.company === company && r.status === 'accepted' && !r.isRecharge);
+    const completedMap = loadCompleted();
+    let posted = 0;
+    ads.forEach(ad => {
+      const excluded = ad.excludedOccIds && ad.excludedOccIds.length ? new Set(ad.excludedOccIds) : null;
+      const count = ad.count || 0;
+      for(let i = 0; i < count; i++){
+        const occId = ad.id + '_' + i;
+        if(excluded && excluded.has(occId)) continue; // supprimée par l'entreprise, crédit déjà rendu
+        if(completedMap[occId]) continue; // déjà diffusée : consommée, ne compte plus comme "postée en attente"
+        posted++;
+      }
+    });
+    return posted;
+  }
+  function getCompanyPostableCount(company){
+    return Math.max(0, getBalance(company) - getCompanyPostedCount(company));
+  }
+
   function renderCompanyProfile(){
     if(!session || session.role !== 'entreprise') return;
-    const balanceEl = document.getElementById('profileBalance');
-    if(balanceEl) balanceEl.textContent = getBalance(session.name);
+    const postableEl = document.getElementById('profilePostable');
+    const postedEl = document.getElementById('profilePosted');
+    if(postableEl) postableEl.textContent = getCompanyPostableCount(session.name);
+    if(postedEl) postedEl.textContent = getCompanyPostedCount(session.name);
   }
 
   function getUnitPriceForCompany(companyName){
@@ -5193,7 +5256,7 @@
     const picker = document.getElementById('creditCompanyPicker');
     const balanceEl = document.getElementById('creditCompanyBalance');
     if(!picker || !balanceEl) return;
-    balanceEl.textContent = picker.value ? getBalance(picker.value) : 0;
+    balanceEl.textContent = picker.value ? getCompanyPostableCount(picker.value) : 0;
   }
 
   function renderCreditCompanyPicker(){
@@ -5227,7 +5290,7 @@
       renderCreditCompanyBalance();
       showSavedIndicator();
       if(resultEl){
-        resultEl.innerHTML = `<p style="color:var(--gold); font-size:13px; margin-top:6px;">✓ ${escapeHtml(amount)} annonce(s) ajoutée(s) à ${escapeHtml(company)}. Nouveau solde : ${getBalance(company)}.</p>`;
+        resultEl.innerHTML = `<p style="color:var(--gold); font-size:13px; margin-top:6px;">✓ ${escapeHtml(amount)} annonce(s) ajoutée(s) à ${escapeHtml(company)}. Nouveau solde postable : ${getCompanyPostableCount(company)}.</p>`;
       }
     });
   }
