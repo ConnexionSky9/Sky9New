@@ -2650,6 +2650,11 @@
   const DIRECTION_SUBTAB_PERMS = ['dirOverview', 'dirRequests', 'dirRecharge', 'dirActive', 'dirSalary', 'dirTax', 'dirDebts'];
 
   function applyEmployeeDirectionAccess(){
+    // Cette fonction ne concerne que les employés ayant un accès Direction limité
+    // par leur grade. Elle ne doit jamais s'exécuter pour un compte Direction complet
+    // (ni entreprise/particulier) — sinon elle pouvait, lors d'une synchronisation
+    // cloud, masquer par erreur l'onglet Direction d'un vrai compte Direction.
+    if(!session || session.role !== 'employe') return;
     const tabDirection = document.getElementById('tabBtnDirection');
     const gradeId = loadEmployeeGrades()[session.name];
     const perms = gradeId ? getGradePermissions(gradeId) : {};
@@ -3744,7 +3749,7 @@
     const now = new Date();
     const time = now.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'}) + ' — ' + now.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
     const logs = loadLogs();
-    logs.unshift({ time, text });
+    logs.unshift({ id: 'log_' + Date.now() + '_' + Math.random().toString(36).slice(2), time, text });
     saveLogs(logs);
     renderLogs();
   }
@@ -3992,7 +3997,14 @@
       const notTodayBlock = !isDone && !isToday && !isDirectionViewer;
       const notOnDuty = !isDone && !isOnDuty(myName) && !isDirectionViewer;
       const disabled = locked || outOfWindow || notTodayBlock || notOnDuty;
-      const checkable = !isDone && !disabled;
+
+      // Surbrillance / opacité basées uniquement sur l'heure exacte (indépendant du
+      // statut "en service" ou d'un éventuel verrouillage) : l'annonce en cours
+      // (± 5 minutes autour de son heure) est mise en avant, celle déjà passée
+      // s'estompe, celle à venir reste normale.
+      const withinCurrentWindow = Math.abs(occTs - nowTs) <= CHECK_WINDOW_MS;
+      const isCurrentToDo = !isDone && withinCurrentWindow;
+      const isPast = isToday && !withinCurrentWindow && occTs < nowTs;
 
       let noteHtml = '';
       if(locked){
@@ -4024,11 +4036,10 @@
            <div class="ent-edit-zone" data-dir-edit-zone="${escapeHtml(o.ad.id)}" style="display:none; margin-top:10px;"></div>`
         : '';
 
-      const isPast = isToday && occTs < nowTs;
       if(isToday && !isPast && planningFocusOccId === null){ planningFocusOccId = o.id; }
 
       return `
-      <div class="schedule-row has-ads${checkable ? ' row-diffused' : ''}${isPast ? ' row-past' : ''}" data-occ-row="${o.id}">
+      <div class="schedule-row has-ads${isCurrentToDo ? ' row-diffused' : ''}${isPast ? ' row-past' : ''}" data-occ-row="${o.id}">
         <div class="schedule-time">${o.time}</div>
         <div class="schedule-content">
           <label class="schedule-check" style="${disabled ? 'cursor:not-allowed;' : ''}">
@@ -6256,15 +6267,73 @@
         }
       };
 
-      function pushStateToCloud(){
+      function mergeValues(localVal, remoteVal){
+        // Fusionne intelligemment au lieu d'écraser : évite qu'une demande envoyée
+        // par une entreprise disparaisse parce qu'un autre appareil a sauvegardé
+        // juste après elle (deux écritures presque simultanées sur des données
+        // différentes ne doivent jamais s'effacer l'une l'autre).
+        if(Array.isArray(localVal) && Array.isArray(remoteVal)){
+          const sample = localVal[0] || remoteVal[0];
+          const keyField = sample && typeof sample === 'object'
+            ? ('id' in sample ? 'id' : ('user' in sample ? 'user' : null))
+            : null;
+          const bothUsable = keyField && localVal.every(x => x && typeof x === 'object' && keyField in x) && remoteVal.every(x => x && typeof x === 'object' && keyField in x);
+          if(bothUsable){
+            const order = [];
+            const map = new Map();
+            remoteVal.forEach(item => {
+              const k = item[keyField]; if(k === undefined) return;
+              if(!map.has(k)) order.push(k); map.set(k, item);
+            });
+            localVal.forEach(item => {
+              const k = item[keyField]; if(k === undefined) return;
+              if(!map.has(k)) order.push(k); map.set(k, item);
+            });
+            return order.map(k => map.get(k));
+          }
+          // Pas d'identifiant fiable et cohérent sur ces éléments : on ne peut pas
+          // fusionner finement, on garde la version locale (comportement précédent).
+          return localVal;
+        }
+        if(localVal && remoteVal && typeof localVal === 'object' && typeof remoteVal === 'object' && !Array.isArray(localVal) && !Array.isArray(remoteVal)){
+          // Fusion clé par clé (ex: soldes, statuts de service) : les deux côtés
+          // gardent ce qu'ils ont ajouté, le local gagne seulement sur les clés
+          // modifiées des deux côtés.
+          return Object.assign({}, remoteVal, localVal);
+        }
+        if(localVal === null || localVal === undefined) return remoteVal;
+        return localVal;
+      }
+
+      async function pushStateToCloud(){
         if(!cloudDocRef) return;
-        const payload = {};
-        CLOUD_SYNCED_KEYS.forEach(k => {
-          const v = localStorage.getItem(k);
-          if(v !== null) payload[k] = v;
-        });
-        payload._updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-        cloudDocRef.set(payload, { merge: true }).catch(err => cloudLog('Erreur d\'enregistrement :', err));
+        try{
+          const snap = await cloudDocRef.get();
+          const remote = snap.exists ? (snap.data() || {}) : {};
+          const payload = {};
+          CLOUD_SYNCED_KEYS.forEach(k => {
+            const localRaw = localStorage.getItem(k);
+            const remoteRaw = Object.prototype.hasOwnProperty.call(remote, k) ? remote[k] : null;
+            let localVal = null, remoteVal = null;
+            try{ localVal = localRaw !== null ? JSON.parse(localRaw) : null; }catch(e){ localVal = null; }
+            try{ remoteVal = (remoteRaw !== null && remoteRaw !== undefined) ? JSON.parse(remoteRaw) : null; }catch(e){ remoteVal = null; }
+
+            if(localVal === null && remoteVal === null) return;
+            const merged = mergeValues(localVal, remoteVal);
+            const mergedStr = JSON.stringify(merged);
+            payload[k] = mergedStr;
+            if(mergedStr !== localRaw){
+              // Répercute immédiatement la fusion dans ce navigateur (sans redéclencher un envoi).
+              cloudApplyingRemote = true;
+              _origSetItem(k, mergedStr);
+              cloudApplyingRemote = false;
+            }
+          });
+          payload._updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+          await cloudDocRef.set(payload, { merge: true });
+        }catch(err){
+          cloudLog('Erreur d\'enregistrement :', err);
+        }
       }
 
       // Rafraîchit toutes les vues actuellement visibles après une mise à jour
