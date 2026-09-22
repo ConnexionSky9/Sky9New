@@ -2979,6 +2979,10 @@
     els.recapPeriod = document.getElementById(cfg.recapPeriodId);
     els.recapHours = document.getElementById(cfg.recapHoursId);
     els.adCount = document.getElementById(cfg.adCountId);
+    if(cfg.hideCountField && els.adCount){
+      const wrapper = els.adCount.closest('.field');
+      if(wrapper) wrapper.style.display = 'none';
+    }
     els.recapCount = document.getElementById(cfg.recapCountId);
     els.recapTotal = document.getElementById(cfg.recapTotalId);
     els.submitBtn = document.getElementById(cfg.submitBtnId);
@@ -3072,9 +3076,16 @@
       const selected = getSelectedDays();
       recapDays.textContent = selected.length === 7 ? 'Tous les jours' : selected.sort().map(d => DAY_LABELS[d]).join(', ');
     }
+    function getEffectiveCount(){
+      if(cfg.hideCountField){
+        return isMultiTextMode() ? (getAllTexts().length || 1) : 1;
+      }
+      let c = parseInt(els.adCount.value, 10);
+      if(isNaN(c) || c < 1){ c = 1; }
+      return c;
+    }
     function updateTotal(){
-      let count = parseInt(els.adCount.value, 10);
-      if(isNaN(count) || count < 1){ count = 1; }
+      let count = getEffectiveCount();
       const unitPrice = session ? getUnitPriceForCompany(session.name) : UNIT_PRICE;
       els.recapCount.textContent = count;
       const unitEl = document.getElementById(cfg.recapUnitPriceId);
@@ -3163,8 +3174,7 @@
       const texts = getAllTexts();
       if(texts.length === 0){ els.text.focus(); return; }
       const isMulti = texts.length > 1;
-      let count = parseInt(els.adCount.value, 10);
-      if(isNaN(count) || count < 1){ count = 1; }
+      let count = getEffectiveCount();
 
       if(cfg.balanceMode){
         const balance = session ? getBalance(session.name) : 0;
@@ -3260,7 +3270,7 @@
     toggleAdvancedBtnId: 'toggleAdvancedBtn', advancedSettingsId: 'advancedSettings', dayOptionsId: 'dayOptions',
     recapDaysId: 'recapDays', recapUnitPriceId: 'recapUnitPrice', panelUnitPriceId: 'panelUnitPrice',
     resetBtnId: 'resetAdFormBtn', myRequestsId: 'myRequests', balanceMode: true, balanceWarningId: 'recapBalanceWarning',
-    extraTextsContainerId: 'extraTexts', addTextBtnId: 'addTextBtn', multiTextNoteId: 'multiTextNote'
+    extraTextsContainerId: 'extraTexts', addTextBtnId: 'addTextBtn', multiTextNoteId: 'multiTextNote', hideCountField: true
   });
 
   const particulierAdForm = setupAdForm({
@@ -6190,6 +6200,15 @@
   // navigateurs/contextes), on revérifie le solde à intervalle régulier.
   setInterval(refreshEntrepriseLiveData, 4000);
 
+  // Filet de sécurité équivalent côté Direction : revérifie régulièrement les
+  // nouvelles demandes (annonce/rechargement), même si la synchro temps réel
+  // Firebase rencontre un souci ponctuel.
+  setInterval(() => {
+    if(session && session.role === 'direction' && typeof renderDirectionRequests === 'function'){
+      renderDirectionRequests();
+    }
+  }, 4000);
+
   // ==================================================================
   // ========== SYNCHRONISATION AVEC UNE VRAIE BASE DE DONNÉES =========
   // ==================================================================
@@ -6319,8 +6338,21 @@
             try{ remoteVal = (remoteRaw !== null && remoteRaw !== undefined) ? JSON.parse(remoteRaw) : null; }catch(e){ remoteVal = null; }
 
             if(localVal === null && remoteVal === null) return;
-            const merged = mergeValues(localVal, remoteVal);
+
+            let merged;
+            try{
+              merged = mergeValues(localVal, remoteVal);
+            }catch(mergeErr){
+              // En cas de souci imprévu dans la fusion, on ne perd jamais la donnée
+              // locale : on l'envoie telle quelle plutôt que de bloquer tout l'envoi.
+              cloudLog('Fusion impossible pour', k, '— envoi de la version locale telle quelle.', mergeErr);
+              merged = (localVal !== null) ? localVal : remoteVal;
+            }
+            if(merged === undefined) merged = (localVal !== null) ? localVal : remoteVal;
+            if(merged === undefined) return;
+
             const mergedStr = JSON.stringify(merged);
+            if(mergedStr === undefined) return;
             payload[k] = mergedStr;
             if(mergedStr !== localRaw){
               // Répercute immédiatement la fusion dans ce navigateur (sans redéclencher un envoi).
@@ -6331,8 +6363,24 @@
           });
           payload._updatedAt = firebase.firestore.FieldValue.serverTimestamp();
           await cloudDocRef.set(payload, { merge: true });
+          cloudLog('Envoi réussi (' + Object.keys(payload).length + ' clé(s)).');
         }catch(err){
-          cloudLog('Erreur d\'enregistrement :', err);
+          cloudLog('Erreur lors de la fusion/lecture, tentative d\'envoi direct de secours :', err);
+          // Filet de sécurité : si la lecture/fusion a échoué (ex: hors-ligne, erreur
+          // réseau), on envoie quand même les données locales telles quelles plutôt
+          // que de ne rien envoyer du tout et de perdre silencieusement l'action.
+          try{
+            const fallbackPayload = {};
+            CLOUD_SYNCED_KEYS.forEach(k => {
+              const v = localStorage.getItem(k);
+              if(v !== null) fallbackPayload[k] = v;
+            });
+            fallbackPayload._updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+            await cloudDocRef.set(fallbackPayload, { merge: true });
+            cloudLog('Envoi de secours réussi.');
+          }catch(err2){
+            cloudLog('Échec de l\'envoi de secours également :', err2);
+          }
         }
       }
 
