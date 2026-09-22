@@ -6278,7 +6278,7 @@
     'echonews_duty_totals', 'echonews_grades', 'echonews_employee_grades', 'echonews_week_reset_marker',
     'echonews_company_prices', 'echonews_company_balances', 'echonews_grade_permissions',
     'echonews_week_expenses', 'echonews_revenue_reset_marker', 'echonews_debt_adjustments',
-    'echonews_company_payments', 'echonews_reviews', 'echonews_salary_ledger'
+    'echonews_company_payments', 'echonews_reviews', 'echonews_salary_ledger', 'echonews_tombstones'
   ];
 
   let cloudDb = null;
@@ -6295,10 +6295,70 @@
       cloudDb = firebase.firestore();
       cloudDocRef = cloudDb.collection('echonews').doc('state');
 
-      // On intercepte localStorage.setItem : chaque écriture locale déclenche
-      // (avec un léger délai anti-rafale) un envoi vers Firestore.
       const _origSetItem = localStorage.setItem.bind(localStorage);
+      const _origGetItem = localStorage.getItem.bind(localStorage);
+
+      // ---------- Registre des suppressions ("tombstones") ----------
+      // Un simple "assemblage des deux côtés" (fusion) est parfait pour ne jamais
+      // perdre un AJOUT (nouvelle demande, nouvel avis...) fait par un autre appareil
+      // en même temps. Mais seul, il empêche aussi toute SUPPRESSION de tenir : un
+      // élément supprimé ici pouvait être réintroduit par la version encore présente
+      // ailleurs. On note donc chaque suppression dans un registre séparé (lui-même
+      // synchronisé), et la fusion l'exclut alors définitivement, où qu'il réapparaisse.
+      function loadTombstones(){
+        try{
+          const raw = _origGetItem('echonews_tombstones');
+          return raw ? JSON.parse(raw) : {};
+        }catch(e){ return {}; }
+      }
+      function isTombstoned(tombstones, key, id){
+        return Object.prototype.hasOwnProperty.call(tombstones, key + '::' + id);
+      }
+      function recordTombstones(cloudKey, ids){
+        if(!ids.length) return;
+        const tombstones = loadTombstones();
+        let changed = false;
+        ids.forEach(id => {
+          const tKey = cloudKey + '::' + id;
+          if(!tombstones[tKey]){ tombstones[tKey] = Date.now(); changed = true; }
+        });
+        if(changed) _origSetItem('echonews_tombstones', JSON.stringify(tombstones));
+      }
+
+      function detectKeyField(localVal, remoteVal){
+        const sample = (Array.isArray(localVal) && localVal[0]) || (Array.isArray(remoteVal) && remoteVal[0]);
+        if(!sample || typeof sample !== 'object') return null;
+        if('id' in sample) return 'id';
+        if('user' in sample) return 'user';
+        return null;
+      }
+
+      // On intercepte localStorage.setItem : chaque écriture locale déclenche
+      // (avec un léger délai anti-rafale) un envoi vers Firestore, et repère au
+      // passage tout élément retiré d'un tableau pour l'enregistrer comme supprimé.
       localStorage.setItem = function(key, value){
+        if(CLOUD_SYNCED_KEYS.includes(key) && key !== 'echonews_tombstones'){
+          try{
+            const oldRaw = _origGetItem(key);
+            const oldVal = oldRaw ? JSON.parse(oldRaw) : null;
+            const newVal = JSON.parse(value);
+            if(Array.isArray(oldVal) && Array.isArray(newVal)){
+              const keyField = detectKeyField(oldVal, newVal);
+              if(keyField){
+                const newIds = new Set(newVal.filter(x => x && typeof x === 'object').map(x => x[keyField]));
+                const removedIds = oldVal
+                  .filter(x => x && typeof x === 'object' && x[keyField] !== undefined && !newIds.has(x[keyField]))
+                  .map(x => x[keyField]);
+                if(removedIds.length) recordTombstones(key, removedIds);
+              }
+            } else if(oldVal && newVal && typeof oldVal === 'object' && typeof newVal === 'object' && !Array.isArray(oldVal) && !Array.isArray(newVal)){
+              // Carte simple (ex: diffusions cochées par occurrence, statut de
+              // service) : une clé présente avant et absente maintenant = supprimée.
+              const removedKeys = Object.keys(oldVal).filter(k2 => !(k2 in newVal));
+              if(removedKeys.length) recordTombstones(key, removedKeys);
+            }
+          }catch(e){}
+        }
         _origSetItem(key, value);
         if(cloudReady && !cloudApplyingRemote && CLOUD_SYNCED_KEYS.includes(key)){
           clearTimeout(cloudPushTimer);
@@ -6306,26 +6366,28 @@
         }
       };
 
-      function mergeValues(localVal, remoteVal){
+      function mergeValues(cloudKey, localVal, remoteVal){
         // Fusionne intelligemment au lieu d'écraser : évite qu'une demande envoyée
         // par une entreprise disparaisse parce qu'un autre appareil a sauvegardé
         // juste après elle (deux écritures presque simultanées sur des données
-        // différentes ne doivent jamais s'effacer l'une l'autre).
+        // différentes ne doivent jamais s'effacer l'une l'autre) — tout en respectant
+        // les suppressions explicites (voir tombstones ci-dessus), qui doivent
+        // toujours rester définitives.
+        const tombstones = loadTombstones();
         if(Array.isArray(localVal) && Array.isArray(remoteVal)){
-          const sample = localVal[0] || remoteVal[0];
-          const keyField = sample && typeof sample === 'object'
-            ? ('id' in sample ? 'id' : ('user' in sample ? 'user' : null))
-            : null;
+          const keyField = detectKeyField(localVal, remoteVal);
           const bothUsable = keyField && localVal.every(x => x && typeof x === 'object' && keyField in x) && remoteVal.every(x => x && typeof x === 'object' && keyField in x);
           if(bothUsable){
             const order = [];
             const map = new Map();
             remoteVal.forEach(item => {
               const k = item[keyField]; if(k === undefined) return;
+              if(isTombstoned(tombstones, cloudKey, k)) return;
               if(!map.has(k)) order.push(k); map.set(k, item);
             });
             localVal.forEach(item => {
               const k = item[keyField]; if(k === undefined) return;
+              if(isTombstoned(tombstones, cloudKey, k)) return;
               if(!map.has(k)) order.push(k); map.set(k, item);
             });
             return order.map(k => map.get(k));
@@ -6337,11 +6399,32 @@
         if(localVal && remoteVal && typeof localVal === 'object' && typeof remoteVal === 'object' && !Array.isArray(localVal) && !Array.isArray(remoteVal)){
           // Fusion clé par clé (ex: soldes, statuts de service) : les deux côtés
           // gardent ce qu'ils ont ajouté, le local gagne seulement sur les clés
-          // modifiées des deux côtés.
-          return Object.assign({}, remoteVal, localVal);
+          // modifiées des deux côtés — et toute clé supprimée (tombstone) reste
+          // définitivement absente, même si l'autre côté la contient encore.
+          const merged = Object.assign({}, remoteVal, localVal);
+          Object.keys(merged).forEach(k2 => {
+            if(isTombstoned(tombstones, cloudKey, k2)) delete merged[k2];
+          });
+          return merged;
         }
         if(localVal === null || localVal === undefined) return remoteVal;
         return localVal;
+      }
+
+      function mergedValueForKey(k, localRaw, remoteRaw){
+        let localVal = null, remoteVal = null;
+        try{ localVal = localRaw !== null && localRaw !== undefined ? JSON.parse(localRaw) : null; }catch(e){ localVal = null; }
+        try{ remoteVal = remoteRaw !== null && remoteRaw !== undefined ? JSON.parse(remoteRaw) : null; }catch(e){ remoteVal = null; }
+        if(localVal === null && remoteVal === null) return null;
+        let merged;
+        try{
+          merged = mergeValues(k, localVal, remoteVal);
+        }catch(mergeErr){
+          cloudLog('Fusion impossible pour', k, '— on garde la version disponible.', mergeErr);
+          merged = (localVal !== null) ? localVal : remoteVal;
+        }
+        if(merged === undefined) merged = (localVal !== null) ? localVal : remoteVal;
+        return merged;
       }
 
       async function pushStateToCloud(){
@@ -6353,24 +6436,8 @@
           CLOUD_SYNCED_KEYS.forEach(k => {
             const localRaw = localStorage.getItem(k);
             const remoteRaw = Object.prototype.hasOwnProperty.call(remote, k) ? remote[k] : null;
-            let localVal = null, remoteVal = null;
-            try{ localVal = localRaw !== null ? JSON.parse(localRaw) : null; }catch(e){ localVal = null; }
-            try{ remoteVal = (remoteRaw !== null && remoteRaw !== undefined) ? JSON.parse(remoteRaw) : null; }catch(e){ remoteVal = null; }
-
-            if(localVal === null && remoteVal === null) return;
-
-            let merged;
-            try{
-              merged = mergeValues(localVal, remoteVal);
-            }catch(mergeErr){
-              // En cas de souci imprévu dans la fusion, on ne perd jamais la donnée
-              // locale : on l'envoie telle quelle plutôt que de bloquer tout l'envoi.
-              cloudLog('Fusion impossible pour', k, '— envoi de la version locale telle quelle.', mergeErr);
-              merged = (localVal !== null) ? localVal : remoteVal;
-            }
-            if(merged === undefined) merged = (localVal !== null) ? localVal : remoteVal;
-            if(merged === undefined) return;
-
+            const merged = mergedValueForKey(k, localRaw, remoteRaw);
+            if(merged === null) return;
             const mergedStr = JSON.stringify(merged);
             if(mergedStr === undefined) return;
             payload[k] = mergedStr;
@@ -6429,14 +6496,25 @@
         if(snap.exists){
           const data = snap.data();
           cloudApplyingRemote = true;
+          let anyChange = false;
           CLOUD_SYNCED_KEYS.forEach(k => {
-            if(Object.prototype.hasOwnProperty.call(data, k)){
-              _origSetItem(k, data[k]);
+            if(!Object.prototype.hasOwnProperty.call(data, k)) return;
+            // Fusion (et non écrasement) même en réception : une donnée locale plus
+            // fraîche que ce que ce message reçu contient encore (ex: une photo tout
+            // juste ajoutée, pas encore reflétée par ce snapshot précis) ne doit
+            // jamais être effacée par cette mise à jour.
+            const localRaw = _origGetItem(k);
+            const merged = mergedValueForKey(k, localRaw, data[k]);
+            if(merged === null) return;
+            const mergedStr = JSON.stringify(merged);
+            if(mergedStr !== localRaw){
+              _origSetItem(k, mergedStr);
+              anyChange = true;
             }
           });
           cloudApplyingRemote = false;
           cloudReady = true;
-          refreshAllViewsFromCloud();
+          if(anyChange) refreshAllViewsFromCloud();
         }else{
           // Aucune donnée en ligne pour l'instant : on envoie l'état local actuel
           // pour amorcer la base (par exemple, tout premier lancement).
