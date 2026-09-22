@@ -3922,7 +3922,7 @@
   // Construit, pour une annonce acceptée, la liste de ses diffusions (date + heure)
   // en respectant : la plage horaire demandée, la fréquence, et le nombre total payé,
   // réparties jour après jour sur la période demandée (donc sur la semaine si besoin).
-  function generateSchedule(ad){
+  function generateSchedule(ad, keepAutoDeletedForEmployeeView){
     const hasMultiTexts = ad.texts && ad.texts.length > 1;
     const step = FREQ_MINUTES[ad.freq] || 60;
     const startM = toMinutes(ad.timeStart || '12:00');
@@ -3956,9 +3956,12 @@
     const hardCap = new Date(cursor.getTime() + 730 * 86400000);
 
     const allowedDays = (ad.days && ad.days.length) ? ad.days : null;
-    // Occurrences retirées par l'entreprise (annonce manquée non diffusée, supprimée
-    // depuis son planning) : elles ne doivent plus jamais apparaître nulle part.
-    const excludedOccIds = (ad.excludedOccIds && ad.excludedOccIds.length) ? new Set(ad.excludedOccIds) : null;
+    // Occurrences retirées : soit supprimées manuellement par l'entreprise, soit
+    // auto-supprimées après 15 minutes sans diffusion. Ça ne compte plus jamais
+    // dans le solde ni dans le planning ENTREPRISE — mais le planning EMPLOYÉ,
+    // lui, continue de les afficher (voir keepAutoDeletedForEmployeeView), pour
+    // qu'aucune annonce ne disparaisse de son suivi.
+    const excludedOccIds = (!keepAutoDeletedForEmployeeView && ad.excludedOccIds && ad.excludedOccIds.length) ? new Set(ad.excludedOccIds) : null;
     // Textes modifiés par l'entreprise annonce par annonce (une occurrence précise
     // uniquement) : ne remplacent jamais le texte des autres occurrences de la
     // même demande.
@@ -4066,7 +4069,7 @@
     }
 
     let allOcc = [];
-    accepted.forEach(ad => { allOcc = allOcc.concat(generateSchedule(ad)); });
+    accepted.forEach(ad => { allOcc = allOcc.concat(generateSchedule(ad, true)); });
 
     if(allOcc.length === 0 && acceptedServiceToday.length === 0){
       container.innerHTML = '<p class="requests-empty">Aucune diffusion programmée pour le moment.</p>';
