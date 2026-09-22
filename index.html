@@ -506,6 +506,45 @@
     position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
     clip:rect(0,0,0,0); white-space:nowrap; border:0;
   }
+
+  /* ---------- Chat privé ---------- */
+  .chat-unread-badge{
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:16px; height:16px; padding:0 4px; margin-left:4px;
+    background: var(--red); color:#fff; border-radius:8px;
+    font-family:'IBM Plex Mono', monospace; font-size:10px; font-weight:700; line-height:16px;
+  }
+  .chat-thread{
+    display:flex; flex-direction:column; gap:10px;
+    max-height:420px; overflow-y:auto; padding:14px;
+    background: var(--bg-raised); border:1px solid var(--line); border-radius:2px;
+    margin-bottom:14px;
+  }
+  .chat-bubble-row{ display:flex; }
+  .chat-bubble-row.mine{ justify-content:flex-end; }
+  .chat-bubble-row.theirs{ justify-content:flex-start; }
+  .chat-bubble{
+    max-width:78%; background: var(--bg-card); border:1px solid var(--line);
+    border-radius:6px; padding:9px 12px;
+  }
+  .chat-bubble-row.mine .chat-bubble{ background: rgba(31,95,168,0.12); border-color: var(--gold); }
+  .chat-bubble-from{
+    font-family:'Oswald', sans-serif; font-weight:600; font-size:11.5px;
+    color: var(--gold); margin-bottom:3px;
+  }
+  .chat-bubble-text{ font-size:13.5px; color: var(--text); white-space:pre-wrap; word-break:break-word; }
+  .chat-bubble-time{ font-family:'IBM Plex Mono', monospace; font-size:10px; color: var(--text-faint); margin-top:5px; }
+  .chat-input-row textarea{
+    width:100%; min-height:70px; resize:vertical;
+    background: var(--bg-raised); border:1px solid var(--line); color: var(--text);
+    font-family:'IBM Plex Sans', sans-serif; font-size:14px; padding:10px 12px; border-radius:2px;
+  }
+  .chat-input-actions{
+    display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap;
+  }
+  .chat-image-preview-name{ font-family:'IBM Plex Mono', monospace; font-size:11px; color: var(--text-dim); }
+  @media (max-width:600px){ .chat-bubble{ max-width:90%; } }
+
   .image-lightbox{
     display:none; position:fixed; inset:0; z-index:500;
     background: rgba(10,15,20,0.9);
@@ -1132,8 +1171,25 @@
       <nav class="subtabs" role="tablist" aria-label="Sections entreprise">
         <button class="subtab active" role="tab" data-subtarget="entDemandeHub">Demande</button>
         <button class="subtab" role="tab" data-subtarget="entPlanning">Mon planning</button>
+        <button class="subtab" role="tab" data-subtarget="entChat">💬 Chat <span class="chat-unread-badge" id="entChatBadge" style="display:none;"></span></button>
         <button class="subtab" role="tab" data-subtarget="entRecharge">Profil de l'entreprise</button>
       </nav>
+
+      <div class="subpanel" id="entChat">
+        <div class="requests-block">
+          <h2>Chat privé avec la Direction / les employés</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Une question, un problème ? Écris ici — seule ta entreprise voit cette conversation. Tu peux aussi joindre une image.</p>
+          <div class="chat-thread" id="entChatThread"><p class="requests-empty">Aucun message pour le moment. Dis bonjour !</p></div>
+          <div class="chat-input-row">
+            <textarea id="entChatInput" placeholder="Écris ton message..." maxlength="500"></textarea>
+            <div class="chat-input-actions">
+              <label class="file-upload-btn">📎 Image<input type="file" accept="image/*" id="entChatImageInput"></label>
+              <span id="entChatImagePreviewName" class="chat-image-preview-name"></span>
+              <button type="button" class="ad-submit" id="entChatSendBtn">Envoyer</button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div class="subpanel" id="entPlanning">
         <p style="font-size:13px; color:var(--text-dim); margin:0 0 16px;">Le planning de diffusion de vos annonces uniquement — vous ne voyez pas celui des autres entreprises. Vous pouvez modifier le texte d'une annonce jusqu'à 5 minutes avant sa diffusion ; passé ce délai, elle est verrouillée.</p>
@@ -1749,6 +1805,7 @@
         <button class="subtab" role="tab" data-subtarget="dirSpecial" data-cat="ads">Demandes spéciales</button>
         <button class="subtab" role="tab" data-subtarget="dirSpecialActive" data-cat="ads">Demandes spéciales actives</button>
         <button class="subtab" role="tab" data-subtarget="dirCompanyHistory" data-cat="companies">Historique entreprises</button>
+        <button class="subtab" role="tab" data-subtarget="dirChat" data-cat="companies">💬 Chat entreprises <span class="chat-unread-badge" id="dirChatBadge" style="display:none;"></span></button>
         <button class="subtab" role="tab" data-subtarget="dirSalary" data-cat="employees">Salaire</button>
         <button class="subtab" role="tab" data-subtarget="dirEmpHistory" data-cat="employees">Historique employés</button>
         <button class="subtab" role="tab" data-subtarget="dirDebts" data-cat="finances">Facturation</button>
@@ -1952,6 +2009,26 @@
             <select id="companyHistoryPicker"></select>
           </div>
           <div id="companyHistoryList"></div>
+        </div>
+      </div>
+
+      <div class="subpanel" id="dirChat">
+        <div class="requests-block">
+          <h2>Chat entreprises</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Choisis une entreprise pour voir et répondre à sa conversation privée. Chaque entreprise ne voit que son propre échange.</p>
+          <div class="field" style="max-width:340px; margin-bottom:16px;">
+            <label for="dirChatCompanyPicker">Entreprise</label>
+            <select id="dirChatCompanyPicker"></select>
+          </div>
+          <div class="chat-thread" id="dirChatThread"><p class="requests-empty">Choisis une entreprise ci-dessus.</p></div>
+          <div class="chat-input-row">
+            <textarea id="dirChatInput" placeholder="Écris ta réponse..." maxlength="500"></textarea>
+            <div class="chat-input-actions">
+              <label class="file-upload-btn">📎 Image<input type="file" accept="image/*" id="dirChatImageInput"></label>
+              <span id="dirChatImagePreviewName" class="chat-image-preview-name"></span>
+              <button type="button" class="ad-submit" id="dirChatSendBtn">Envoyer</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2658,7 +2735,7 @@
     }
   }
 
-  const DIRECTION_SUBTAB_PERMS = ['dirOverview', 'dirRequests', 'dirRecharge', 'dirActive', 'dirSalary', 'dirTax', 'dirDebts'];
+  const DIRECTION_SUBTAB_PERMS = ['dirOverview', 'dirRequests', 'dirRecharge', 'dirActive', 'dirSalary', 'dirTax', 'dirDebts', 'dirChat'];
 
   function applyEmployeeDirectionAccess(){
     // Cette fonction ne concerne que les employés ayant un accès Direction limité
@@ -2926,6 +3003,7 @@
         if(btn.dataset.subtarget === 'dirDebts') renderManualInvoicePicker();
         if(btn.dataset.subtarget === 'dirEmpHistory') renderEmpHistoryPicker();
         if(btn.dataset.subtarget === 'dirCompanyHistory') renderCompanyHistoryPicker();
+        if(btn.dataset.subtarget === 'dirChat') renderDirChatPicker();
         if(btn.dataset.subtarget === 'empPlanning') renderBroadcastPlanning();
         if(btn.dataset.subtarget === 'empSalary') renderSalary();
         if(btn.dataset.subtarget === 'empServiceTime') renderDutyUI();
@@ -2939,6 +3017,7 @@
         }
         if(btn.dataset.subtarget === 'entRecharge'){ renderRechargeRecap(); renderMyRechargeRequests(); renderCompanyProfile(); renderMyDoneAds(); }
         if(btn.dataset.subtarget === 'entPlanning'){ entPlanningDayOffset = 0; companyPlanningEditingAdId = null; renderCompanyPlanning(); renderMyDoneAds(); }
+        if(btn.dataset.subtarget === 'entChat'){ renderEntChatThread(); }
         if(btn.dataset.subtarget === 'entJournaliste') renderMyServiceRequests('journaliste', 'myJournalisteRequests');
         if(btn.dataset.subtarget === 'entPhoto') renderMyServiceRequests('photo', 'myPhotoRequests');
         if(btn.dataset.subtarget === 'entInterview') renderMyServiceRequests('interview', 'myInterviewRequests');
@@ -5467,6 +5546,7 @@
     { key: 'dirSalary', label: "Salaire" },
     { key: 'dirTax', label: "Impôt" },
     { key: 'dirDebts', label: "Facturation" },
+    { key: 'dirChat', label: "Chat entreprises" },
     { key: 'createEmployeeAccounts', label: "Créer des identifiants" }
   ];
 
@@ -5945,6 +6025,221 @@
   }
 
   /* ---------- Historique permanent entreprise ---------- */
+  /* ---------- Chat privé entreprise <-> Direction/employés ---------- */
+  const LS_CHAT_KEY = 'echonews_chats';
+  function loadChats(){
+    try{
+      const raw = localStorage.getItem(LS_CHAT_KEY);
+      return raw ? JSON.parse(raw) : [];
+    }catch(e){ return []; }
+  }
+  function saveChats(list){
+    try{ localStorage.setItem(LS_CHAT_KEY, JSON.stringify(list)); }catch(e){}
+  }
+  function addChatMessage(company, fromName, fromRole, text, image){
+    const list = loadChats();
+    list.push({
+      id: 'chat_' + Date.now() + '_' + Math.random().toString(36).slice(2),
+      company, from: fromName, fromRole,
+      text: text || '', image: image || null, ts: Date.now(),
+      readByCompany: fromRole === 'entreprise',
+      readByStaff: fromRole !== 'entreprise'
+    });
+    saveChats(list);
+  }
+
+  // Petite sonnerie de cloche synthétique (aucun fichier audio nécessaire).
+  function playChatBell(){
+    try{
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if(!Ctx) return;
+      const ctx = new Ctx();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(1046.5, ctx.currentTime);
+      o.frequency.setValueAtTime(1318.5, ctx.currentTime + 0.12);
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.55);
+      o.connect(g); g.connect(ctx.destination);
+      o.start();
+      o.stop(ctx.currentTime + 0.6);
+    }catch(e){}
+  }
+
+  let chatBellReady = false; // évite de sonner dès le tout premier chargement
+  let chatSeenIds = new Set();
+  function checkForNewChatMessages(){
+    if(!session) return;
+    const all = loadChats();
+    const relevant = (session.role === 'entreprise')
+      ? all.filter(m => m.company === session.name)
+      : all; // Direction / employé autorisé : voit toutes les entreprises
+
+    let newForMe = false;
+    relevant.forEach(m => {
+      if(chatSeenIds.has(m.id)) return;
+      chatSeenIds.add(m.id);
+      if(!chatBellReady) return; // premier passage : on mémorise sans sonner
+      const isMine = m.from === session.name;
+      const concernsMe = session.role === 'entreprise' ? m.fromRole !== 'entreprise' : m.fromRole === 'entreprise';
+      if(!isMine && concernsMe) newForMe = true;
+    });
+    if(chatBellReady && newForMe) playChatBell();
+    chatBellReady = true;
+
+    // Badges non-lus
+    const entBadge = document.getElementById('entChatBadge');
+    if(entBadge && session.role === 'entreprise'){
+      const unread = all.filter(m => m.company === session.name && m.fromRole !== 'entreprise' && !m.readByCompany).length;
+      entBadge.style.display = unread > 0 ? 'inline-block' : 'none';
+      entBadge.textContent = unread > 0 ? String(unread) : '';
+    }
+    const dirBadge = document.getElementById('dirChatBadge');
+    if(dirBadge){
+      const unread = all.filter(m => m.fromRole === 'entreprise' && !m.readByStaff).length;
+      dirBadge.style.display = unread > 0 ? 'inline-block' : 'none';
+      dirBadge.textContent = unread > 0 ? String(unread) : '';
+    }
+  }
+
+  function chatBubbleHtml(m, sideIsMine){
+    const time = new Date(m.ts).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+    return `
+      <div class="chat-bubble-row ${sideIsMine ? 'mine' : 'theirs'}">
+        <div class="chat-bubble">
+          <div class="chat-bubble-from">${escapeHtml(m.from)}</div>
+          ${m.text ? `<div class="chat-bubble-text">${escapeHtml(m.text)}</div>` : ''}
+          ${m.image ? `<img src="${m.image}" class="proof-thumb chat-bubble-img" style="max-width:220px; max-height:180px; border:1px solid var(--line); display:block; margin-top:6px;">` : ''}
+          <div class="chat-bubble-time">${time}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function readAndAttachImage(inputEl, previewEl, onReady){
+    const file = inputEl.files && inputEl.files[0];
+    if(!file || !file.type.startsWith('image/')){ onReady(null); return; }
+    if(previewEl) previewEl.textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = () => onReady(reader.result);
+    reader.readAsDataURL(file);
+  }
+
+  /* ---- Côté entreprise ---- */
+  function renderEntChatThread(){
+    if(!session || session.role !== 'entreprise') return;
+    const container = document.getElementById('entChatThread');
+    if(!container) return;
+    const list = loadChats().filter(m => m.company === session.name);
+    container.innerHTML = list.length === 0
+      ? '<p class="requests-empty">Aucun message pour le moment. Dis bonjour !</p>'
+      : list.map(m => chatBubbleHtml(m, m.fromRole === 'entreprise')).join('');
+    container.scrollTop = container.scrollHeight;
+
+    // Marque comme lus les messages de la Direction/employés.
+    const all = loadChats();
+    let changed = false;
+    all.forEach(m => {
+      if(m.company === session.name && m.fromRole !== 'entreprise' && !m.readByCompany){ m.readByCompany = true; changed = true; }
+    });
+    if(changed) saveChats(all);
+    checkForNewChatMessages();
+  }
+
+  const entChatSendBtn = document.getElementById('entChatSendBtn');
+  if(entChatSendBtn){
+    entChatSendBtn.addEventListener('click', () => {
+      if(!session) return;
+      const input = document.getElementById('entChatInput');
+      const imageInput = document.getElementById('entChatImageInput');
+      const previewEl = document.getElementById('entChatImagePreviewName');
+      const text = input.value.trim();
+      readAndAttachImage(imageInput, null, (image) => {
+        if(!text && !image) return;
+        addChatMessage(session.name, session.name, 'entreprise', text, image);
+        input.value = '';
+        imageInput.value = '';
+        if(previewEl) previewEl.textContent = '';
+        renderEntChatThread();
+      });
+    });
+  }
+
+  /* ---- Côté Direction / employés autorisés ---- */
+  function renderDirChatPicker(){
+    const picker = document.getElementById('dirChatCompanyPicker');
+    if(!picker) return;
+    if(!picker.dataset.filled){
+      picker.innerHTML = COMPANY_ACCOUNTS.map(acc => `<option value="${escapeHtml(acc.display)}">${escapeHtml(acc.display)}</option>`).join('');
+      picker.dataset.filled = '1';
+      picker.addEventListener('change', renderDirChatThread);
+    }
+    renderDirChatThread();
+  }
+
+  function renderDirChatThread(){
+    const picker = document.getElementById('dirChatCompanyPicker');
+    const container = document.getElementById('dirChatThread');
+    if(!picker || !container) return;
+    const company = picker.value;
+    const list = loadChats().filter(m => m.company === company);
+    container.innerHTML = list.length === 0
+      ? '<p class="requests-empty">Aucun message avec cette entreprise pour le moment.</p>'
+      : list.map(m => chatBubbleHtml(m, m.fromRole !== 'entreprise')).join('');
+    container.scrollTop = container.scrollHeight;
+
+    // Marque comme lus les messages de cette entreprise.
+    const all = loadChats();
+    let changed = false;
+    all.forEach(m => {
+      if(m.company === company && m.fromRole === 'entreprise' && !m.readByStaff){ m.readByStaff = true; changed = true; }
+    });
+    if(changed) saveChats(all);
+    checkForNewChatMessages();
+  }
+
+  const dirChatSendBtn = document.getElementById('dirChatSendBtn');
+  if(dirChatSendBtn){
+    dirChatSendBtn.addEventListener('click', () => {
+      if(!session) return;
+      const picker = document.getElementById('dirChatCompanyPicker');
+      const input = document.getElementById('dirChatInput');
+      const imageInput = document.getElementById('dirChatImageInput');
+      const previewEl = document.getElementById('dirChatImagePreviewName');
+      const company = picker ? picker.value : '';
+      const text = input.value.trim();
+      if(!company) return;
+      readAndAttachImage(imageInput, null, (image) => {
+        if(!text && !image) return;
+        const fromRole = session.role === 'direction' ? 'direction' : 'employe';
+        addChatMessage(company, session.name, fromRole, text, image);
+        input.value = '';
+        imageInput.value = '';
+        if(previewEl) previewEl.textContent = '';
+        renderDirChatThread();
+        addLog(`Message privé envoyé à <b>${escapeHtml(company)}</b> par <b>${escapeHtml(session.name)}</b>.`);
+      });
+    });
+  }
+
+  ['entChatImageInput', 'dirChatImageInput'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el){
+      el.addEventListener('change', () => {
+        const previewEl = document.getElementById(id === 'entChatImageInput' ? 'entChatImagePreviewName' : 'dirChatImagePreviewName');
+        const file = el.files && el.files[0];
+        if(previewEl) previewEl.textContent = file ? file.name : '';
+      });
+    }
+  });
+
+  // Vérifie régulièrement l'arrivée de nouveaux messages (sonnerie + badge),
+  // même si l'utilisateur n'a pas l'onglet Chat ouvert.
+  setInterval(checkForNewChatMessages, 5000);
+  setTimeout(checkForNewChatMessages, 2000);
+
   function renderCompanyHistoryPicker(){
     const picker = document.getElementById('companyHistoryPicker');
     if(!picker) return;
@@ -6339,6 +6634,55 @@
     }
   }, 4000);
 
+  // ---------- Nettoyage automatique des annonces non diffusées (15 min) ----------
+  // Passé 15 minutes après son heure de diffusion, une annonce jamais cochée par
+  // un employé est automatiquement retirée du planning (entreprise + employé),
+  // et son crédit est rendu au solde d'annonces postables — exactement comme une
+  // suppression manuelle par l'entreprise, mais sans action requise de sa part.
+  const AUTO_DELETE_MISSED_MS = 15 * 60 * 1000;
+  function autoCleanupMissedAds(){
+    if(typeof loadRequests !== 'function' || typeof generateSchedule !== 'function') return;
+    const nowTs = Date.now();
+    const list = loadRequests();
+    const completedMap = loadCompleted();
+    let totalRemoved = 0;
+    const perCompanyCount = {};
+    list.forEach(ad => {
+      if(ad.status !== 'accepted' || ad.isRecharge) return;
+      let occs;
+      try{ occs = generateSchedule(ad); }catch(e){ return; }
+      occs.forEach(o => {
+        if(completedMap[o.id]) return; // déjà diffusée : on n'y touche jamais
+        const dayMidnight = new Date(o.date + 'T00:00:00').getTime();
+        const occTs = dayMidnight + o.sortMinutes * 60000;
+        if(nowTs - occTs > AUTO_DELETE_MISSED_MS){
+          if(!ad.excludedOccIds) ad.excludedOccIds = [];
+          if(!ad.excludedOccIds.includes(o.id)){
+            ad.excludedOccIds.push(o.id);
+            totalRemoved++;
+            perCompanyCount[ad.company] = (perCompanyCount[ad.company] || 0) + 1;
+          }
+        }
+      });
+    });
+    if(totalRemoved > 0){
+      saveRequests(list);
+      const companies = Object.keys(perCompanyCount);
+      addLog(`Nettoyage automatique : ${totalRemoved} annonce(s) non diffusée(s) depuis plus de 15 minutes retirée(s) du planning (${companies.join(', ')}) — crédit rendu automatiquement au solde postable.`);
+      companies.forEach(company => {
+        if(typeof logCompanyHistory === 'function'){
+          logCompanyHistory(company, 'ad_refuse', `${perCompanyCount[company]} annonce(s) non diffusée(s) supprimée(s) automatiquement après 15 minutes (crédit rendu)`, { by: 'Système' });
+        }
+      });
+      if(typeof renderBroadcastPlanning === 'function') renderBroadcastPlanning();
+      if(typeof renderCompanyPlanning === 'function') renderCompanyPlanning();
+      if(typeof renderCompanyProfile === 'function') renderCompanyProfile();
+      if(typeof renderActiveAds === 'function') renderActiveAds();
+    }
+  }
+  setInterval(() => { if(session) autoCleanupMissedAds(); }, 30000);
+  setTimeout(() => { if(session) autoCleanupMissedAds(); }, 3000);
+
   // ==================================================================
   // ========== SYNCHRONISATION AVEC UNE VRAIE BASE DE DONNÉES =========
   // ==================================================================
@@ -6388,7 +6732,8 @@
     'echonews_duty_totals', 'echonews_grades', 'echonews_employee_grades', 'echonews_week_reset_marker',
     'echonews_company_prices', 'echonews_company_balances', 'echonews_grade_permissions',
     'echonews_week_expenses', 'echonews_revenue_reset_marker', 'echonews_debt_adjustments',
-    'echonews_company_payments', 'echonews_reviews', 'echonews_salary_ledger', 'echonews_tombstones'
+    'echonews_company_payments', 'echonews_reviews', 'echonews_salary_ledger', 'echonews_tombstones',
+    'echonews_chats'
   ];
 
   let cloudDb = null;
@@ -6590,7 +6935,8 @@
           'renderMyRequests', 'renderMyRechargeRequests', 'renderCompanyProfile', 'renderCompanyPlanning', 'renderMyDoneAds',
           'renderPricingPicker', 'renderCreditCompanyPicker', 'renderManualInvoicePicker', 'renderTax',
           'renderOverviewStats', 'renderWeeklyCompanyRecap', 'renderReviewsList', 'renderDirectionRequests',
-          'applyEmployeeDirectionAccess', 'renderRechargeRecap'
+          'applyEmployeeDirectionAccess', 'renderRechargeRecap',
+          'renderEntChatThread', 'renderDirChatThread', 'checkForNewChatMessages'
           // 'applySession' retiré volontairement : il forçait un retour sur l'onglet
           // principal du rôle et un scroll en haut de page à CHAQUE synchronisation
           // cloud (y compris pour ses propres actions), ce qui donnait l'impression
