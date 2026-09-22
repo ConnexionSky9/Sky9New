@@ -4174,30 +4174,46 @@
 
     container.innerHTML = header + `<div class="schedule-grid">${serviceRows}${rows}</div>`;
     container.scrollTop = savedScrollTop;
+    // Tout le câblage (cases à cocher, suppression photo/annonce, modification,
+    // copier) se fait désormais par délégation d'événements posée une seule fois
+    // sur le conteneur — voir setupBroadcastPlanningDelegation ci-dessous. Ça évite
+    // qu'un rattachement par ligne échoue silencieusement pour la 2e, 3e case, etc.
+  }
 
-    container.querySelectorAll('input[type="checkbox"][data-occ]').forEach(cb => {
-      cb.addEventListener('change', () => {
-        if(cb.disabled){ return; }
-        toggleCompleted(cb.dataset.occ, cb.checked, cb.dataset.company, cb.dataset.text, cb.dataset.date, cb.dataset.time);
-      });
+  // ---------- Planning employé : délégation d'événements (posée UNE SEULE FOIS) ----------
+  // Le conteneur #broadcastPlanning n'est jamais recréé — seul son contenu change à
+  // chaque rendu. En posant les écouteurs directement dessus (et en retrouvant
+  // l'élément concerné via closest() au moment du clic/changement), on élimine
+  // structurellement tout risque que cocher une 2e case ou ajouter une 2e photo
+  // ne fonctionne pas : plus besoin de rattacher quoi que ce soit à chaque rendu.
+  (function setupBroadcastPlanningDelegation(){
+    const container = document.getElementById('broadcastPlanning');
+    if(!container || container.dataset.planningDelegationReady) return;
+    container.dataset.planningDelegationReady = '1';
+
+    container.addEventListener('change', (e) => {
+      const cb = e.target.closest('input[type="checkbox"][data-occ]');
+      if(!cb || cb.disabled) return;
+      toggleCompleted(cb.dataset.occ, cb.checked, cb.dataset.company, cb.dataset.text, cb.dataset.date, cb.dataset.time);
     });
 
-    container.querySelectorAll('.dir-delete-proof-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+    container.addEventListener('click', (e) => {
+      const deleteProofBtn = e.target.closest('.dir-delete-proof-btn');
+      if(deleteProofBtn){
         const map = loadCompleted();
-        const entry = map[btn.dataset.occ];
+        const entry = map[deleteProofBtn.dataset.occ];
         if(!entry) return;
         entry.proof = null;
         saveCompleted(map);
         const by = session ? session.name : 'Direction';
         addLog(`Photo justificative supprimée par la Direction (<b>${escapeHtml(by)}</b>) pour une annonce déjà diffusée.`);
         renderBroadcastPlanning();
-      });
-    });
+        return;
+      }
 
-    container.querySelectorAll('.dir-delete-ad-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const adId = btn.dataset.adId;
+      const deleteAdBtn = e.target.closest('.dir-delete-ad-btn');
+      if(deleteAdBtn){
+        const adId = deleteAdBtn.dataset.adId;
         const list = loadRequests();
         const ad = list.find(r => r.id === adId);
         if(!ad) return;
@@ -4211,12 +4227,12 @@
         renderBroadcastPlanning();
         if(typeof renderActiveAds === 'function') renderActiveAds();
         if(typeof renderCompanyPlanning === 'function') renderCompanyPlanning();
-      });
-    });
+        return;
+      }
 
-    container.querySelectorAll('.dir-edit-ad-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const adId = btn.dataset.adId;
+      const editBtn = e.target.closest('.dir-edit-ad-btn');
+      if(editBtn){
+        const adId = editBtn.dataset.adId;
         const zone = container.querySelector(`.ent-edit-zone[data-dir-edit-zone="${adId}"]`);
         if(!zone) return;
         const isOpen = zone.style.display !== 'none';
@@ -4273,17 +4289,17 @@
           setTimeout(() => renderBroadcastPlanning(), 900);
           showSavedIndicator();
         });
-      });
-    });
+        return;
+      }
 
-    container.querySelectorAll('.copy-ad-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const text = btn.dataset.copyText || '';
+      const copyBtn = e.target.closest('.copy-ad-btn');
+      if(copyBtn){
+        const text = copyBtn.dataset.copyText || '';
         const markCopied = () => {
-          const original = btn.textContent;
-          btn.textContent = '✓ Copié';
-          btn.classList.add('copied');
-          setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1500);
+          const original = copyBtn.textContent;
+          copyBtn.textContent = '✓ Copié';
+          copyBtn.classList.add('copied');
+          setTimeout(() => { copyBtn.textContent = original; copyBtn.classList.remove('copied'); }, 1500);
         };
         if(navigator.clipboard && navigator.clipboard.writeText){
           navigator.clipboard.writeText(text).then(markCopied).catch(() => {
@@ -4293,7 +4309,7 @@
             ta.style.opacity = '0';
             document.body.appendChild(ta);
             ta.select();
-            try{ document.execCommand('copy'); }catch(e){}
+            try{ document.execCommand('copy'); }catch(err){}
             document.body.removeChild(ta);
             markCopied();
           });
@@ -4304,13 +4320,14 @@
           ta.style.opacity = '0';
           document.body.appendChild(ta);
           ta.select();
-          try{ document.execCommand('copy'); }catch(e){}
+          try{ document.execCommand('copy'); }catch(err){}
           document.body.removeChild(ta);
           markCopied();
         }
-      });
+        return;
+      }
     });
-  }
+  })();
 
   // ---------- Ajout de photo par annonce : délégation d'événements ----------
   // Posé UNE SEULE FOIS sur le conteneur (qui, lui, n'est jamais recréé — seul
