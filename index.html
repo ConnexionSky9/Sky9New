@@ -3105,15 +3105,23 @@
       if(panelEl) panelEl.textContent = formatUSD(unitPrice);
 
       if(cfg.balanceMode){
-        const balance = session ? getCompanyPostableCount(session.name) : 0;
-        els.recapTotal.textContent = balance + ' annonce(s)';
+        const isDirectionUnlimited = session && session.role === 'direction';
         const warnEl = cfg.balanceWarningId ? document.getElementById(cfg.balanceWarningId) : null;
-        if(warnEl){
-          if(balance < count){
-            warnEl.style.display = 'block';
-            warnEl.textContent = `Solde insuffisant : il vous manque ${count - balance} annonce(s). Rendez-vous dans "Profil de l'entreprise" pour recharger votre solde.`;
-          } else {
-            warnEl.style.display = 'none';
+        if(isDirectionUnlimited){
+          // La Direction dispose d'un solde illimité et gratuit : aucune annonce
+          // demandée par un compte Direction n'est jamais bloquée ni facturée.
+          els.recapTotal.textContent = 'Illimité (Direction)';
+          if(warnEl) warnEl.style.display = 'none';
+        }else{
+          const balance = session ? getCompanyPostableCount(session.name) : 0;
+          els.recapTotal.textContent = balance + ' annonce(s)';
+          if(warnEl){
+            if(balance < count){
+              warnEl.style.display = 'block';
+              warnEl.textContent = `Solde insuffisant : il vous manque ${count - balance} annonce(s). Rendez-vous dans "Profil de l'entreprise" pour recharger votre solde.`;
+            } else {
+              warnEl.style.display = 'none';
+            }
           }
         }
       } else {
@@ -3187,7 +3195,8 @@
       const isMulti = texts.length > 1;
       let count = getEffectiveCount();
 
-      if(cfg.balanceMode){
+      const isDirectionUnlimited = session && session.role === 'direction';
+      if(cfg.balanceMode && !isDirectionUnlimited){
         const balance = session ? getCompanyPostableCount(session.name) : 0;
         if(balance < count){
           updateTotal();
@@ -3213,7 +3222,9 @@
         timeEnd: els.timeEnd.value || '02:00',
         days: getSelectedDays(),
         count: count,
-        total: count * unitPrice,
+        // Gratuit pour la Direction (solde illimité) : aucun montant facturé,
+        // donc aucun impact sur le Revenu / semaine une fois acceptée.
+        total: isDirectionUnlimited ? 0 : count * unitPrice,
         status: 'pending',
         hiddenFromPlanning: false,
         submittedAt: new Date().toLocaleString('fr-FR')
@@ -4220,47 +4231,73 @@
         }
       });
     });
+  }
 
-    container.querySelectorAll('[data-occ-proof]').forEach(zone => {
-      function handleFile(file){
-        if(!file || !file.type.startsWith('image/')) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-          const map = loadCompleted();
-          const occId = zone.dataset.occProof;
-          if(!map[occId]) return;
-          map[occId].proof = reader.result;
-          saveCompleted(map);
-          const histList = loadEmpDiffusionHistory();
-          const histEntry = histList.find(h => h.occId === occId);
-          if(histEntry){ histEntry.proof = reader.result; saveEmpDiffusionHistory(histList); }
-          renderBroadcastPlanning();
-        };
-        reader.readAsDataURL(file);
-      }
-      zone.addEventListener('paste', (e) => {
-        const items = e.clipboardData ? e.clipboardData.items : [];
-        for(const item of items){
-          if(item.type.startsWith('image/')){ handleFile(item.getAsFile()); break; }
-        }
-      });
-      zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
-      zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
-      zone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        zone.classList.remove('drag-over');
-        const file = e.dataTransfer.files && e.dataTransfer.files[0];
-        handleFile(file);
-      });
-      const fileInput = zone.querySelector('.proof-file-input');
-      if(fileInput){
-        fileInput.addEventListener('click', (e) => e.stopPropagation());
-        fileInput.addEventListener('change', () => {
-          handleFile(fileInput.files && fileInput.files[0]);
-        });
+  // ---------- Ajout de photo par annonce : délégation d'événements ----------
+  // Posé UNE SEULE FOIS sur le conteneur (qui, lui, n'est jamais recréé — seul
+  // son contenu change à chaque rendu). Ainsi, peu importe combien de fois le
+  // planning se redessine, l'ajout de photo fonctionne toujours pour CHAQUE
+  // annonce, y compris la 2e, 3e, etc. — plus besoin de rattacher des écouteurs
+  // à chaque case à chaque rendu, ce qui pouvait échouer silencieusement.
+  (function setupBroadcastProofDelegation(){
+    const container = document.getElementById('broadcastPlanning');
+    if(!container || container.dataset.proofDelegationReady) return;
+    container.dataset.proofDelegationReady = '1';
+
+    function handleProofFile(zone, file){
+      if(!file || !file.type || !file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const map = loadCompleted();
+        const occId = zone.dataset.occProof;
+        if(!occId || !map[occId]) return;
+        map[occId].proof = reader.result;
+        saveCompleted(map);
+        const histList = loadEmpDiffusionHistory();
+        const histEntry = histList.find(h => h.occId === occId);
+        if(histEntry){ histEntry.proof = reader.result; saveEmpDiffusionHistory(histList); }
+        renderBroadcastPlanning();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    container.addEventListener('paste', (e) => {
+      const zone = e.target.closest('[data-occ-proof]');
+      if(!zone) return;
+      const items = e.clipboardData ? e.clipboardData.items : [];
+      for(const item of items){
+        if(item.type && item.type.startsWith('image/')){ handleProofFile(zone, item.getAsFile()); break; }
       }
     });
-  }
+    container.addEventListener('dragover', (e) => {
+      const zone = e.target.closest('[data-occ-proof]');
+      if(!zone) return;
+      e.preventDefault();
+      zone.classList.add('drag-over');
+    });
+    container.addEventListener('dragleave', (e) => {
+      const zone = e.target.closest('[data-occ-proof]');
+      if(zone) zone.classList.remove('drag-over');
+    });
+    container.addEventListener('drop', (e) => {
+      const zone = e.target.closest('[data-occ-proof]');
+      if(!zone) return;
+      e.preventDefault();
+      zone.classList.remove('drag-over');
+      const file = e.dataTransfer.files && e.dataTransfer.files[0];
+      handleProofFile(zone, file);
+    });
+    container.addEventListener('click', (e) => {
+      if(e.target.closest('.proof-file-input')) e.stopPropagation();
+    });
+    container.addEventListener('change', (e) => {
+      const fileInput = e.target.closest('.proof-file-input');
+      if(!fileInput) return;
+      const zone = fileInput.closest('[data-occ-proof]');
+      if(!zone) return;
+      handleProofFile(zone, fileInput.files && fileInput.files[0]);
+    });
+  })();
 
   /* ---------- Planning propre à chaque entreprise ---------- */
   let entPlanningDayOffset = 0;
