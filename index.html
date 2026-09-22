@@ -727,6 +727,13 @@
   .schedule-row.row-diffused .schedule-time{ color: var(--text-dim); }
   .schedule-row.row-past{ opacity: 0.45; }
   .schedule-row.row-past:hover{ opacity: 0.7; }
+
+  /* Cadre de couleur selon l'état de l'annonce */
+  .schedule-row{ border: 2px solid transparent; box-sizing: border-box; }
+  .schedule-row.row-state-done{ border-color: var(--emerald); }
+  .schedule-row.row-state-missed{ border-color: var(--red); }
+  .schedule-row.row-state-current{ border-color: #e8c547; }
+  .schedule-row.row-state-future{ border-color: #3b82f6; }
   .schedule-time{
     font-family:'IBM Plex Mono', monospace; font-size: 12px; color: var(--text-faint);
     width: 52px; flex-shrink:0; padding-top: 2px;
@@ -4113,11 +4120,13 @@
 
       // Surbrillance / opacité basées uniquement sur l'heure exacte (indépendant du
       // statut "en service" ou d'un éventuel verrouillage) : l'annonce en cours
-      // (± 5 minutes autour de son heure) est mise en avant, celle déjà passée
-      // s'estompe, celle à venir reste normale.
+      // (± 5 minutes autour de son heure) est mise en avant, celle manquée (pas
+      // cochée) s'estompe pour la repérer. Une annonce déjà cochée reste TOUJOURS
+      // pleinement visible, pour garder un suivi clair — elle ne s'efface ni ne
+      // s'estompe jamais une fois cochée.
       const withinCurrentWindow = Math.abs(occTs - nowTs) <= CHECK_WINDOW_MS;
       const isCurrentToDo = !isDone && withinCurrentWindow;
-      const isPast = isToday && !withinCurrentWindow && occTs < nowTs;
+      const isPast = isToday && !withinCurrentWindow && occTs < nowTs && !isDone;
 
       let noteHtml = '';
       if(locked){
@@ -4150,10 +4159,22 @@
            <div class="ent-edit-zone" data-dir-edit-zone="${escapeHtml(o.ad.id)}" style="display:none; margin-top:10px;"></div>`
         : '';
 
-      if(isToday && !isPast && planningFocusOccId === null){ planningFocusOccId = o.id; }
+      // Le bouton "Aller à l'heure actuelle" doit toujours cibler la prochaine
+      // annonce non traitée (ni cochée, ni déjà passée) — jamais une annonce
+      // déjà cochée, même si elle est chronologiquement plus tôt dans la journée.
+      const isTrulyPastForFocus = isToday && occTs < nowTs;
+      if(isToday && !isDone && !isTrulyPastForFocus && planningFocusOccId === null){ planningFocusOccId = o.id; }
+
+      // Cadre de couleur selon l'état : vert = diffusée, rouge = non diffusée
+      // (manquée), jaune = cochable maintenant, bleu = à venir plus tard.
+      let stateClass;
+      if(isDone) stateClass = 'row-state-done';
+      else if(isPast) stateClass = 'row-state-missed';
+      else if(isCurrentToDo) stateClass = 'row-state-current';
+      else stateClass = 'row-state-future';
 
       return `
-      <div class="schedule-row has-ads${isCurrentToDo ? ' row-diffused' : ''}${isPast ? ' row-past' : ''}" data-occ-row="${o.id}">
+      <div class="schedule-row has-ads ${stateClass}${isCurrentToDo ? ' row-diffused' : ''}${isPast ? ' row-past' : ''}" data-occ-row="${o.id}">
         <div class="schedule-time">${o.time}</div>
         <div class="schedule-content">
           <label class="schedule-check" style="${disabled ? 'cursor:not-allowed;' : ''}">
