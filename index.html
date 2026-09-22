@@ -410,6 +410,15 @@
   .freq-chip:hover{ color: var(--text); }
   .freq-chip.selected{ border-color: var(--gold); color: var(--gold); background: rgba(31,95,168,0.08); }
 
+  .corr-type-toggle{ display:flex; gap:8px; }
+  .corr-type-btn{
+    appearance:none; border: 1px solid var(--line); background: var(--bg-raised);
+    color: var(--text-dim); font-family:'IBM Plex Sans', sans-serif; font-size:13px;
+    padding: 9px 16px; cursor:pointer; border-radius: 2px;
+  }
+  .corr-type-btn:hover{ color: var(--text); }
+  .corr-type-btn.active{ border-color: var(--gold); color: var(--gold); background: rgba(31,95,168,0.08); font-weight:600; }
+
   .ad-submit{
     align-self:flex-start;
     background: var(--gold);
@@ -1724,6 +1733,7 @@
       <nav class="subtabs" role="tablist" aria-label="Sections direction">
         <button class="subtab active" role="tab" data-subtarget="dirOverview" data-cat="overview">Vue d'ensemble</button>
         <button class="subtab" role="tab" data-subtarget="dirRequests" data-cat="ads">Demandes d'annonce</button>
+        <button class="subtab" role="tab" data-subtarget="dirRecharge" data-cat="ads">Demandes de rechargement</button>
         <button class="subtab" role="tab" data-subtarget="dirActive" data-cat="ads">Annonces actives</button>
         <button class="subtab" role="tab" data-subtarget="dirSpecial" data-cat="ads">Demandes spéciales</button>
         <button class="subtab" role="tab" data-subtarget="dirSpecialActive" data-cat="ads">Demandes spéciales actives</button>
@@ -1798,8 +1808,16 @@
 
       <div class="subpanel" id="dirRequests">
         <div class="requests-block">
-          <h2>Demande d'annonce</h2>
+          <h2>Demandes d'annonce</h2>
           <div id="requestsList"><p class="requests-empty">Aucune demande pour le moment.</p></div>
+        </div>
+      </div>
+
+      <div class="subpanel" id="dirRecharge">
+        <div class="requests-block">
+          <h2>Demandes de rechargement</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Demandes de rechargement de solde envoyées par les entreprises, séparées des demandes d'annonce.</p>
+          <div id="rechargeRequestsList"><p class="requests-empty">Aucune demande pour le moment.</p></div>
         </div>
       </div>
 
@@ -1836,13 +1854,24 @@
 
         <div class="requests-block">
           <h2>Corriger un salaire manuellement</h2>
-          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Ajoute (montant positif) ou retire (montant négatif) une somme du salaire d'un employé, avec un motif.</p>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Ajoute (positif) ou retire (négatif) des annonces payées au tarif du grade, ou directement un montant en argent, avec un motif.</p>
+          <div class="field" style="margin-bottom:14px;">
+            <label>Type de correction</label>
+            <div class="corr-type-toggle" id="salaryCorrectionTypeToggle">
+              <button type="button" class="corr-type-btn active" data-type="ads">Des annonces</button>
+              <button type="button" class="corr-type-btn" data-type="money">De l'argent</button>
+            </div>
+          </div>
           <div class="field-pair" style="margin-bottom:14px;">
             <div class="field">
               <label for="salaryCorrectionEmployeePicker">Employé</label>
               <select id="salaryCorrectionEmployeePicker"></select>
             </div>
-            <div class="field">
+            <div class="field" id="salaryCorrectionAdsField">
+              <label for="salaryCorrectionAdsCount">Nombre d'annonces (+/-)</label>
+              <input type="number" id="salaryCorrectionAdsCount" step="1" placeholder="Ex : 3 ou -3">
+            </div>
+            <div class="field" id="salaryCorrectionMoneyField" style="display:none;">
               <label for="salaryCorrectionAmount">Montant ($, +/-)</label>
               <input type="number" id="salaryCorrectionAmount" step="500" placeholder="Ex : 2000 ou -2000">
             </div>
@@ -2618,7 +2647,7 @@
     }
   }
 
-  const DIRECTION_SUBTAB_PERMS = ['dirOverview', 'dirRequests', 'dirActive', 'dirSalary', 'dirTax', 'dirDebts'];
+  const DIRECTION_SUBTAB_PERMS = ['dirOverview', 'dirRequests', 'dirRecharge', 'dirActive', 'dirSalary', 'dirTax', 'dirDebts'];
 
   function applyEmployeeDirectionAccess(){
     const tabDirection = document.getElementById('tabBtnDirection');
@@ -2870,6 +2899,7 @@
         btns.forEach(b => document.getElementById(b.dataset.subtarget).classList.remove('active'));
         document.getElementById(btn.dataset.subtarget).classList.add('active');
         if(btn.dataset.subtarget === 'dirRequests') renderDirectionRequests();
+        if(btn.dataset.subtarget === 'dirRecharge') renderDirectionRequests();
         if(btn.dataset.subtarget === 'dirActive') renderActiveAds();
         if(btn.dataset.subtarget === 'dirSpecial') renderSpecialRequests();
         if(btn.dataset.subtarget === 'dirSpecialActive') renderSpecialActive();
@@ -3518,18 +3548,25 @@
 
   /* ---------- Direction : traitement des demandes ---------- */
   function renderDirectionRequests(){
-    const container = document.getElementById('requestsList');
-    const kpiPending = document.getElementById('kpiPending');
-    const list = loadRequests();
-    const pending = list.filter(r => r.status === 'pending');
-    kpiPending.textContent = pending.length;
+    const kpiPendingEl = document.getElementById('kpiPending');
+    const allPending = loadRequests().filter(r => r.status === 'pending');
+    if(kpiPendingEl) kpiPendingEl.textContent = allPending.length;
 
-    if(pending.length === 0){
-      container.innerHTML = '<p class="requests-empty">Aucune demande en attente pour le moment.</p>';
+    renderRequestsByType(false, 'requestsList', "Aucune demande d'annonce en attente pour le moment.");
+    renderRequestsByType(true, 'rechargeRequestsList', 'Aucune demande de rechargement en attente pour le moment.');
+  }
+
+  function renderRequestsByType(isRechargeType, containerId, emptyMsg){
+    const container = document.getElementById(containerId);
+    if(!container) return;
+    const items = loadRequests().filter(r => r.status === 'pending' && !!r.isRecharge === isRechargeType);
+
+    if(items.length === 0){
+      container.innerHTML = `<p class="requests-empty">${emptyMsg}</p>`;
       return;
     }
 
-    container.innerHTML = pending.map(r => `
+    container.innerHTML = items.map(r => `
       <div class="request-card" data-id="${r.id}">
         <div class="request-top">
           <div class="rcompany">${escapeHtml(r.company)}</div>
@@ -5273,7 +5310,8 @@
   const LS_GRADE_PERMS_KEY = 'echonews_grade_permissions';
   const PERMISSION_LABELS = [
     { key: 'dirOverview', label: "Vue d'ensemble" },
-    { key: 'dirRequests', label: "Demande d'annonce" },
+    { key: 'dirRequests', label: "Demandes d'annonce" },
+    { key: 'dirRecharge', label: "Demandes de rechargement" },
     { key: 'dirActive', label: "Annonces actives" },
     { key: 'dirSalary', label: "Salaire" },
     { key: 'dirTax', label: "Impôt" },
@@ -5531,19 +5569,52 @@
     if(currentValue) picker.value = currentValue;
   }
 
+  // Bascule visuelle entre correction "en annonces" et "en argent".
+  let salaryCorrectionType = 'ads';
+  const salaryCorrectionTypeToggle = document.getElementById('salaryCorrectionTypeToggle');
+  if(salaryCorrectionTypeToggle){
+    salaryCorrectionTypeToggle.querySelectorAll('.corr-type-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        salaryCorrectionType = btn.dataset.type;
+        salaryCorrectionTypeToggle.querySelectorAll('.corr-type-btn').forEach(b => b.classList.toggle('active', b === btn));
+        const adsField = document.getElementById('salaryCorrectionAdsField');
+        const moneyField = document.getElementById('salaryCorrectionMoneyField');
+        if(adsField) adsField.style.display = salaryCorrectionType === 'ads' ? '' : 'none';
+        if(moneyField) moneyField.style.display = salaryCorrectionType === 'money' ? '' : 'none';
+      });
+    });
+  }
+
   const salaryCorrectionBtn = document.getElementById('salaryCorrectionBtn');
   if(salaryCorrectionBtn){
     salaryCorrectionBtn.addEventListener('click', () => {
       const picker = document.getElementById('salaryCorrectionEmployeePicker');
+      const adsCountInput = document.getElementById('salaryCorrectionAdsCount');
       const amountInput = document.getElementById('salaryCorrectionAmount');
       const reasonInput = document.getElementById('salaryCorrectionReason');
       const resultEl = document.getElementById('salaryCorrectionResult');
       const employee = picker ? picker.value : '';
-      const amount = parseInt(amountInput.value, 10);
-      if(!employee || isNaN(amount) || amount === 0){
-        if(resultEl) resultEl.innerHTML = '<p style="color:var(--red); font-size:13px; margin-top:6px;">Choisis un employé et un montant différent de 0 (positif pour ajouter, négatif pour retirer).</p>';
-        return;
+
+      let amount;
+      let logDetail;
+      if(salaryCorrectionType === 'ads'){
+        const count = parseInt(adsCountInput.value, 10);
+        if(!employee || isNaN(count) || count === 0){
+          if(resultEl) resultEl.innerHTML = '<p style="color:var(--red); font-size:13px; margin-top:6px;">Choisis un employé et un nombre d\'annonces différent de 0 (positif pour ajouter, négatif pour retirer).</p>';
+          return;
+        }
+        const unitPrice = getGradePriceFor(employee);
+        amount = count * unitPrice;
+        logDetail = `${count > 0 ? '+' : ''}${count} annonce(s) × ${formatUSD(unitPrice)}`;
+      }else{
+        amount = parseInt(amountInput.value, 10);
+        if(!employee || isNaN(amount) || amount === 0){
+          if(resultEl) resultEl.innerHTML = '<p style="color:var(--red); font-size:13px; margin-top:6px;">Choisis un employé et un montant différent de 0 (positif pour ajouter, négatif pour retirer).</p>';
+          return;
+        }
+        logDetail = formatUSD(amount);
       }
+
       const reason = (reasonInput ? reasonInput.value.trim() : '') || 'Correction manuelle';
       const ledger = loadSalaryLedger();
       ledger.unshift({
@@ -5552,10 +5623,11 @@
       });
       saveSalaryLedger(ledger);
       const by = session ? session.name : 'Direction';
-      addLog(`Correction de salaire de ${amount > 0 ? '+' : ''}${formatUSD(amount)} pour <b>${escapeHtml(employee)}</b> par <b>${escapeHtml(by)}</b> (${escapeHtml(reason)}).`);
+      addLog(`Correction de salaire (${escapeHtml(logDetail)}, soit ${amount > 0 ? '+' : ''}${formatUSD(amount)}) pour <b>${escapeHtml(employee)}</b> par <b>${escapeHtml(by)}</b> (${escapeHtml(reason)}).`);
+      if(adsCountInput) adsCountInput.value = '';
       if(amountInput) amountInput.value = '';
       if(reasonInput) reasonInput.value = '';
-      if(resultEl) resultEl.innerHTML = `<p style="color:var(--gold); font-size:13px; margin-top:6px;">✓ Correction enregistrée pour ${escapeHtml(employee)}.</p>`;
+      if(resultEl) resultEl.innerHTML = `<p style="color:var(--gold); font-size:13px; margin-top:6px;">✓ Correction enregistrée pour ${escapeHtml(employee)} (${escapeHtml(logDetail)}).</p>`;
       renderSalary();
       showSavedIndicator();
     });
@@ -6203,7 +6275,13 @@
           'renderEmpIdentifiantsList', 'renderSalary', 'renderBroadcastPlanning',
           'renderMyRequests', 'renderMyRechargeRequests', 'renderCompanyProfile', 'renderCompanyPlanning', 'renderMyDoneAds',
           'renderPricingPicker', 'renderCreditCompanyPicker', 'renderManualInvoicePicker', 'renderTax',
-          'renderOverviewStats', 'renderWeeklyCompanyRecap', 'renderReviewsList', 'applySession'
+          'renderOverviewStats', 'renderWeeklyCompanyRecap', 'renderReviewsList', 'renderDirectionRequests',
+          'applyEmployeeDirectionAccess', 'renderRechargeRecap'
+          // 'applySession' retiré volontairement : il forçait un retour sur l'onglet
+          // principal du rôle et un scroll en haut de page à CHAQUE synchronisation
+          // cloud (y compris pour ses propres actions), ce qui donnait l'impression
+          // d'un rechargement de page et pouvait renvoyer l'utilisateur sur un autre
+          // onglet que celui qu'il consultait.
         ];
         fns.forEach(name => {
           try{ if(typeof window[name] === 'function') window[name](); }catch(e){}
