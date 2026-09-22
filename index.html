@@ -3270,7 +3270,7 @@
     toggleAdvancedBtnId: 'toggleAdvancedBtn', advancedSettingsId: 'advancedSettings', dayOptionsId: 'dayOptions',
     recapDaysId: 'recapDays', recapUnitPriceId: 'recapUnitPrice', panelUnitPriceId: 'panelUnitPrice',
     resetBtnId: 'resetAdFormBtn', myRequestsId: 'myRequests', balanceMode: true, balanceWarningId: 'recapBalanceWarning',
-    extraTextsContainerId: 'extraTexts', addTextBtnId: 'addTextBtn', multiTextNoteId: 'multiTextNote', hideCountField: true
+    extraTextsContainerId: 'extraTexts', addTextBtnId: 'addTextBtn', multiTextNoteId: 'multiTextNote'
   });
 
   const particulierAdForm = setupAdForm({
@@ -4042,6 +4042,7 @@
       const dirEditHtml = isDirectionViewer
         ? `<div class="request-actions" style="margin-top:8px;">
              <button type="button" class="ad-reset dir-edit-ad-btn" data-ad-id="${escapeHtml(o.ad.id)}">✏️ Modifier le texte</button>
+             <button type="button" class="btn-refuse dir-delete-ad-btn" data-ad-id="${escapeHtml(o.ad.id)}">🗑️ Supprimer l'annonce</button>
            </div>
            <div class="ent-edit-zone" data-dir-edit-zone="${escapeHtml(o.ad.id)}" style="display:none; margin-top:10px;"></div>`
         : '';
@@ -4088,6 +4089,25 @@
         const by = session ? session.name : 'Direction';
         addLog(`Photo justificative supprimée par la Direction (<b>${escapeHtml(by)}</b>) pour une annonce déjà diffusée.`);
         renderBroadcastPlanning();
+      });
+    });
+
+    container.querySelectorAll('.dir-delete-ad-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const adId = btn.dataset.adId;
+        const list = loadRequests();
+        const ad = list.find(r => r.id === adId);
+        if(!ad) return;
+        const ok = window.confirm(`Supprimer définitivement cette annonce de ${ad.company} du planning ? Cette action est irréversible.`);
+        if(!ok) return;
+        const filtered = list.filter(r => r.id !== adId);
+        saveRequests(filtered);
+        const by = session ? session.name : 'Direction';
+        addLog(`Annonce de <b>${escapeHtml(ad.company)}</b> supprimée du planning par la Direction (<b>${escapeHtml(by)}</b>).`);
+        logCompanyHistory(ad.company, 'ad_refuse', `Annonce supprimée du planning par la Direction : ${ad.text}`, { by });
+        renderBroadcastPlanning();
+        if(typeof renderActiveAds === 'function') renderActiveAds();
+        if(typeof renderCompanyPlanning === 'function') renderCompanyPlanning();
       });
     });
 
