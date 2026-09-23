@@ -9443,6 +9443,7 @@
 
       async function pushStateToCloud(){
         if(!cloudDocRef) return;
+        cloudPushTimer = null; // le délai est écoulé : plus rien n'est "en attente d'envoi"
         try{
           const snap = await cloudDocRef.get();
           const remote = snap.exists ? (snap.data() || {}) : {};
@@ -9489,7 +9490,7 @@
       // reçue depuis le cloud (un autre appareil/navigateur a changé une donnée).
       function refreshAllViewsFromCloud(){
         const fns = [
-          'renderGradesManagement', 'renderGradePermissionsTable', 'renderIdentifiants',
+          'renderGradesManagement', 'renderIdentifiants',
           'renderEmpIdentifiantsList', 'renderSalary', 'renderBroadcastPlanning',
           'renderMyRequests', 'renderMyRechargeRequests', 'renderCompanyProfile', 'renderCompanyPlanning', 'renderMyDoneAds',
           'renderPricingPicker', 'renderCreditCompanyPicker', 'renderManualInvoicePicker', 'renderTax',
