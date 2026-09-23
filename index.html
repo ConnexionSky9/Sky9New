@@ -254,6 +254,10 @@
     font-size: 13px; cursor:pointer;
   }
   .role-toggle button.active{ background: var(--gold); color: var(--bg); font-weight:600; }
+  .maintenance-block{
+    text-align:center; padding: 32px 16px; background: var(--bg-raised);
+    border: 1px solid var(--red); border-radius: 8px; color: var(--text);
+  }
   .login-form{ display:none; flex-direction:column; gap: 16px; }
   .login-form.active{ display:flex; }
   .login-form .field label{
@@ -722,6 +726,24 @@
   }
 
   .tabs button.ev-admin-only.hidden-tab, .subtabs .subtab.ev-admin-only.hidden-tab{ display:none; }
+
+  .cp-section-row{
+    border:1px solid var(--line); border-radius:6px; padding:14px; margin-bottom:14px; background: var(--bg-raised);
+  }
+  .cp-section-row input, .cp-section-row textarea{
+    width:100%; background: var(--bg-card); border:1px solid var(--line); color: var(--text);
+    font-family:'IBM Plex Sans', sans-serif; font-size:13px; padding:8px 10px; border-radius:4px; margin-bottom:8px;
+  }
+  .cp-section-row textarea{ min-height:120px; font-family:'IBM Plex Mono', monospace; font-size:12.5px; line-height:1.5; }
+  .cp-section-row .cp-section-actions{ display:flex; gap:8px; justify-content:flex-end; }
+  .cp-section-row .cp-section-actions button{
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px; background:transparent;
+    border:1px solid var(--line); color: var(--text-dim); padding:6px 10px; cursor:pointer; border-radius:4px;
+  }
+  .cp-content h2, .cp-content h3{ font-family:'Sora', sans-serif; color: var(--gold); }
+  .cp-content ul{ padding-left:22px; }
+  .cp-content img{ max-width:100%; border-radius:6px; margin:10px 0; }
+  .cp-content a{ color: var(--gold); }
 
   /* ---------- Tutoriel guidé interactif (vrais éléments de l'app) ---------- */
   .guided-tour-target{
@@ -1340,6 +1362,11 @@
       <button type="button" data-role="particulier">Particulier</button>
     </div>
 
+    <div class="maintenance-block" id="maintenanceBlock" style="display:none;">
+      <div style="font-size:42px; margin-bottom:12px;">🚧</div>
+      <p id="maintenanceMessageDisplay" style="font-size:15px; line-height:1.5;"></p>
+    </div>
+
     <form class="login-form active" id="formEntreprise">
       <div class="field">
         <label for="companyName">Identifiant entreprise</label>
@@ -1410,6 +1437,7 @@
       <button role="tab" data-target="particulier" id="tabBtnParticulier">Particulier</button>
       <button role="tab" data-target="evenement" id="tabBtnEvenement">🎉 Événement</button>
       <button role="tab" data-target="avis" id="tabBtnAvis">Avis</button>
+      <button role="tab" data-target="siteAdmin" id="tabBtnSiteAdmin" class="hidden-tab">🛠️ Site</button>
     </nav>
     <div class="clearance">
       <span class="dot"></span> ACCÈS : <b id="sessionLabel">—</b>
@@ -2598,6 +2626,179 @@
       </div>
     </section>
 
+    <section class="panel" id="siteAdmin">
+      <nav class="subtabs" role="tablist" aria-label="Sections site">
+        <button class="subtab active" role="tab" data-subtarget="siteAppearance">🎨 Apparence</button>
+        <button class="subtab" role="tab" data-subtarget="siteDiagnostic">🩺 Diagnostic</button>
+        <button class="subtab" role="tab" data-subtarget="siteRequestsAdmin">🔧 Demandes (dépannage)</button>
+        <button class="subtab" role="tab" data-subtarget="siteBackup">💾 Sauvegarde</button>
+        <button class="subtab" role="tab" data-subtarget="siteMaintenance">🚧 Maintenance</button>
+        <button class="subtab" role="tab" data-subtarget="siteCustomPages">🧩 Pages personnalisées</button>
+      </nav>
+
+      <!-- ---------- Apparence ---------- -->
+      <div class="subpanel active" id="siteAppearance">
+        <div class="requests-block">
+          <h2>Couleurs du site</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Change les couleurs principales de toute l'application. Le changement est visible immédiatement pour toi, et pour tout le monde une fois enregistré.</p>
+          <div class="field-pair" style="margin-bottom:14px;">
+            <div class="field">
+              <label for="themeColorGold">Couleur principale (boutons, liens, accents)</label>
+              <input type="color" id="themeColorGold" value="#1857a4" style="height:42px; cursor:pointer;">
+            </div>
+            <div class="field">
+              <label for="themeColorEmerald">Couleur de succès (validé, accepté)</label>
+              <input type="color" id="themeColorEmerald" value="#16a874" style="height:42px; cursor:pointer;">
+            </div>
+          </div>
+          <div class="field-pair" style="margin-bottom:14px;">
+            <div class="field">
+              <label for="themeColorAmber">Couleur d'avertissement</label>
+              <input type="color" id="themeColorAmber" value="#e08a1e" style="height:42px; cursor:pointer;">
+            </div>
+            <div class="field">
+              <label for="themeColorRed">Couleur d'erreur / refus / danger</label>
+              <input type="color" id="themeColorRed" value="#dc3f4a" style="height:42px; cursor:pointer;">
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:20px; max-width:340px;">
+            <label for="themeColorBg">Fond général du site</label>
+            <input type="color" id="themeColorBg" value="#eef2f8" style="height:42px; cursor:pointer;">
+          </div>
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <button class="ad-submit" id="applyThemeBtn">Appliquer et enregistrer pour tout le monde</button>
+            <button class="ad-reset" id="resetThemeBtn">Réinitialiser aux couleurs par défaut</button>
+          </div>
+          <div id="themeApplyResult"></div>
+        </div>
+      </div>
+
+      <!-- ---------- Diagnostic ---------- -->
+      <div class="subpanel" id="siteDiagnostic">
+        <div class="requests-block">
+          <h2>État de la synchronisation</h2>
+          <div class="kpi-row" style="grid-template-columns: repeat(3,1fr); margin-bottom:20px;">
+            <div class="kpi"><div class="label">Connexion serveur</div><div class="value" id="diagConnStatus" style="font-size:18px;">—</div></div>
+            <div class="kpi"><div class="label">Dernière synchro réussie</div><div class="value" id="diagLastSync" style="font-size:15px;">—</div></div>
+            <div class="kpi"><div class="label">Envoi en attente</div><div class="value" id="diagPendingPush" style="font-size:18px;">—</div></div>
+          </div>
+          <button class="ad-submit" id="runDiagnosticBtn">🩺 Lancer un diagnostic complet</button>
+          <div id="diagnosticResult" style="margin-top:16px;"></div>
+        </div>
+        <div class="requests-block">
+          <h2>Volume de données</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Nombre d'éléments actuellement enregistrés, pour repérer une anomalie (ex: un nombre anormalement bas après un souci).</p>
+          <div id="dataVolumeList"></div>
+        </div>
+      </div>
+
+      <!-- ---------- Demandes : dépannage avancé ---------- -->
+      <div class="subpanel" id="siteRequestsAdmin">
+        <div class="requests-block">
+          <h2>Toutes les demandes (annonces + rechargements)</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Vue complète, tous statuts confondus. Utile pour corriger une demande bloquée ou incohérente sans passer par le circuit normal.</p>
+          <div class="field-pair" style="margin-bottom:16px;">
+            <div class="field">
+              <label for="siteReqSearch">Rechercher (entreprise, texte)</label>
+              <input type="text" id="siteReqSearch" placeholder="Rechercher...">
+            </div>
+            <div class="field">
+              <label for="siteReqStatusFilter">Filtrer par statut</label>
+              <select id="siteReqStatusFilter">
+                <option value="">Tous les statuts</option>
+                <option value="pending">En attente</option>
+                <option value="accepted">Acceptée</option>
+                <option value="refused">Refusée</option>
+              </select>
+            </div>
+          </div>
+          <div id="siteRequestsAdminList"></div>
+        </div>
+      </div>
+
+      <!-- ---------- Sauvegarde ---------- -->
+      <div class="subpanel" id="siteBackup">
+        <div class="requests-block">
+          <h2>Sauvegarde et synchronisation</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Les mêmes outils que dans Paramétrage, regroupés ici pour plus de clarté.</p>
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <button type="button" id="siteForceResyncBtn">🔄 Forcer la resynchronisation (moi uniquement)</button>
+            <button type="button" id="siteExportBackupBtn">📥 Exporter une sauvegarde (JSON)</button>
+          </div>
+        </div>
+        <div class="requests-block">
+          <h2>Resynchroniser tout le monde</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Envoie un signal à tous les appareils actuellement connectés (PC et téléphone, tous les rôles) pour qu'ils se resynchronisent immédiatement avec les bonnes informations du serveur — pas seulement le tien.</p>
+          <button class="ad-submit" id="globalResyncBtn" style="background:var(--red); box-shadow:none;">📡 Resynchroniser tout le monde maintenant</button>
+          <div id="globalResyncResult"></div>
+        </div>
+      </div>
+
+      <!-- ---------- Maintenance ---------- -->
+      <div class="subpanel" id="siteMaintenance">
+        <div class="requests-block">
+          <h2>Mode maintenance</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Quand activé, la connexion est bloquée pour les entreprises, employés et particuliers, avec un grand message affiché à la place de l'écran de connexion. Les comptes Direction peuvent toujours se connecter normalement, pour pouvoir désactiver la maintenance.</p>
+          <div class="field-pair" style="margin-bottom:14px;">
+            <div class="field">
+              <label for="maintenanceEnabled">État</label>
+              <select id="maintenanceEnabled">
+                <option value="0">Désactivée</option>
+                <option value="1">Activée</option>
+              </select>
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:20px;">
+            <label for="maintenanceMessage">Message affiché aux utilisateurs</label>
+            <textarea id="maintenanceMessage" maxlength="300">Maintenance de l'interface SKY9 en cours. Merci de réessayer un peu plus tard.</textarea>
+          </div>
+          <button class="ad-submit" id="saveMaintenanceBtn">Enregistrer</button>
+          <div id="maintenanceSaveResult"></div>
+        </div>
+      </div>
+
+      <!-- ---------- Pages personnalisées ---------- -->
+      <div class="subpanel" id="siteCustomPages">
+        <div class="requests-block">
+          <h2>Mes onglets personnalisés</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Crée tes propres onglets dans le menu principal, avec autant de sous-sections que tu veux à l'intérieur. Visible par tout le monde une fois enregistré.</p>
+          <div id="customPagesList"><p class="requests-empty">Aucun onglet personnalisé pour le moment.</p></div>
+          <button class="ad-submit" id="newCustomPageBtn" style="margin-top:14px;">+ Créer un nouvel onglet</button>
+        </div>
+
+        <div class="requests-block" id="customPageEditorBlock" style="display:none;">
+          <h2 id="customPageEditorTitle">Nouvel onglet</h2>
+          <div class="field-pair" style="margin-bottom:14px;">
+            <div class="field" style="flex:0 0 100px;">
+              <label for="cpIcon">Icône (emoji)</label>
+              <input type="text" id="cpIcon" maxlength="4" placeholder="📄" value="📄">
+            </div>
+            <div class="field">
+              <label for="cpTitle">Nom de l'onglet</label>
+              <input type="text" id="cpTitle" maxlength="30" placeholder="Ex : Règlement interne">
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:20px; max-width:340px;">
+            <label for="cpVisibility">Visible par</label>
+            <select id="cpVisibility">
+              <option value="all">Tout le monde connecté</option>
+              <option value="direction">Direction uniquement</option>
+            </select>
+          </div>
+
+          <p style="font-size:12px; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:10px;">Sous-sections (sous-onglets à l'intérieur)</p>
+          <div id="cpSectionsEditor"></div>
+          <button type="button" class="ad-reset" id="cpAddSectionBtn" style="margin:12px 0 20px;">+ Ajouter une sous-section</button>
+
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <button class="ad-submit" id="cpSaveBtn">Enregistrer l'onglet</button>
+            <button class="ad-reset" id="cpCancelBtn">Annuler</button>
+          </div>
+          <div id="cpSaveResult"></div>
+        </div>
+      </div>
+    </section>
+
     <section class="panel" id="avis">
       <div class="ad-grid" style="grid-template-columns: 1fr;">
         <div class="ad-form">
@@ -3048,6 +3249,29 @@
   const loginHint = document.getElementById('loginHint');
   let selectedRole = 'entreprise';
 
+  const LS_MAINTENANCE_KEY = 'echonews_maintenance_mode';
+  function loadMaintenanceMode(){
+    try{
+      const raw = localStorage.getItem(LS_MAINTENANCE_KEY);
+      return raw ? JSON.parse(raw) : { enabled: false, message: '' };
+    }catch(e){ return { enabled: false, message: '' }; }
+  }
+  function saveMaintenanceMode(m){
+    try{ localStorage.setItem(LS_MAINTENANCE_KEY, JSON.stringify(m)); }catch(e){}
+  }
+  function updateMaintenanceOverlay(){
+    const mode = loadMaintenanceMode();
+    const block = document.getElementById('maintenanceBlock');
+    const msgEl = document.getElementById('maintenanceMessageDisplay');
+    const blockThisRole = mode.enabled && selectedRole !== 'direction';
+    if(block) block.style.display = blockThisRole ? 'block' : 'none';
+    if(msgEl) msgEl.textContent = mode.message || "Maintenance de l'interface SKY9 en cours. Merci de réessayer un peu plus tard.";
+    [formEntreprise, formEmploye, formParticulier].forEach(f => {
+      if(f) f.style.display = blockThisRole ? 'none' : '';
+    });
+  }
+  updateMaintenanceOverlay(); // état initial dès le chargement de la page
+
   roleButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       roleButtons.forEach(b => b.classList.remove('active'));
@@ -3057,6 +3281,7 @@
       formEmploye.classList.toggle('active', selectedRole === 'employe');
       formDirection.classList.toggle('active', selectedRole === 'direction');
       formParticulier.classList.toggle('active', selectedRole === 'particulier');
+      updateMaintenanceOverlay();
       if(selectedRole === 'entreprise'){
         loginHint.textContent = "Accès réservé aux entreprises disposant d'un identifiant valide.";
       } else if(selectedRole === 'employe'){
@@ -3429,6 +3654,7 @@
     const sessionLabel = document.getElementById('sessionLabel');
 
     if(typeof renderTickerBanner === 'function') renderTickerBanner();
+    if(typeof injectCustomPagesIntoNav === 'function') injectCustomPagesIntoNav();
 
     tabEntreprises.classList.add('hidden-tab');
     tabEmployes.classList.add('hidden-tab');
@@ -3469,6 +3695,8 @@
       tabDirection.classList.remove('hidden-tab');
       document.querySelectorAll('#direction .subtabs .subtab').forEach(b => b.classList.remove('hidden-tab'));
       document.querySelectorAll('.dir-categories .dir-cat').forEach(b => b.classList.remove('hidden-tab'));
+      const tabSiteAdmin = document.getElementById('tabBtnSiteAdmin');
+      if(tabSiteAdmin) tabSiteAdmin.classList.remove('hidden-tab');
       sessionLabel.textContent = session.name + ' (direction)';
       document.getElementById('companyTagName').textContent = session.name;
       document.getElementById('empSessionName').textContent = session.name;
@@ -3536,9 +3764,12 @@
   }
 
   /* ---------- Onglets ---------- */
-  const buttons = document.querySelectorAll('nav.tabs button');
-  const panels = document.querySelectorAll('section.panel');
+  // Requêtes en direct (pas de liste figée) : indispensable pour que les onglets
+  // personnalisés créés depuis Site → Pages personnalisées fonctionnent, puisqu'ils
+  // sont ajoutés dynamiquement bien après ce premier chargement.
   function showPanel(id){
+    const buttons = document.querySelectorAll('nav.tabs button');
+    const panels = document.querySelectorAll('section.panel');
     buttons.forEach(b => { b.classList.toggle('active', b.dataset.target === id); b.setAttribute('aria-selected', b.dataset.target === id ? 'true' : 'false'); });
     panels.forEach(p => p.classList.toggle('active', p.id === id));
     window.scrollTo({top:0, behavior:'smooth'});
@@ -3549,6 +3780,13 @@
       applyEventAdminVisibility();
       renderWheelPlay();
       if(isEventAdmin()){ renderWheelAdminForm(); renderEventStats(); renderEventAudit(); }
+    }
+    if(id === 'siteAdmin'){
+      renderThemeForm();
+      renderDiagnosticStatus();
+      renderSiteRequestsAdmin();
+      renderMaintenanceForm();
+      renderCustomPagesList();
     }
   }
 
@@ -3593,7 +3831,17 @@
   if(entPlanningTodayBtn) entPlanningTodayBtn.addEventListener('click', () => {
     entPlanningDayOffset = 0; renderCompanyPlanning();
   });
-  buttons.forEach(btn => btn.addEventListener('click', () => showPanel(btn.dataset.target)));
+  // Délégation sur la nav principale (au lieu d'un rattachement par bouton) :
+  // fonctionne aussi automatiquement pour les onglets personnalisés ajoutés
+  // dynamiquement plus tard, sans rien avoir à recâbler.
+  const mainNavEl = document.querySelector('nav.tabs');
+  if(mainNavEl){
+    mainNavEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-target]');
+      if(!btn) return;
+      showPanel(btn.dataset.target);
+    });
+  }
 
   /* ---------- Avis (accessible à tous) ---------- */
   const LS_REVIEWS_KEY = 'echonews_reviews';
@@ -3772,6 +4020,11 @@
         if(btn.dataset.subtarget === 'evWheelAdmin') renderWheelAdminForm();
         if(btn.dataset.subtarget === 'evStats') renderEventStats();
         if(btn.dataset.subtarget === 'evAudit'){ renderWheelAdminSpinsHistory(); renderEventAudit(); }
+        if(btn.dataset.subtarget === 'siteAppearance') renderThemeForm();
+        if(btn.dataset.subtarget === 'siteDiagnostic') renderDiagnosticStatus();
+        if(btn.dataset.subtarget === 'siteRequestsAdmin') renderSiteRequestsAdmin();
+        if(btn.dataset.subtarget === 'siteMaintenance') renderMaintenanceForm();
+        if(btn.dataset.subtarget === 'siteCustomPages') renderCustomPagesList();
         if(btn.dataset.subtarget === 'entJournaliste') renderMyServiceRequests('journaliste', 'myJournalisteRequests');
         if(btn.dataset.subtarget === 'entPhoto') renderMyServiceRequests('photo', 'myPhotoRequests');
         if(btn.dataset.subtarget === 'entInterview') renderMyServiceRequests('interview', 'myInterviewRequests');
@@ -4505,6 +4758,14 @@
     const list = loadRequests();
     const idx = list.findIndex(r => r.id === id);
     if(idx === -1) return;
+    if(list[idx].status === 'accepted'){
+      // Sécurité : quelqu'un d'autre (Alvaro, Lola...) vient déjà de l'accepter
+      // sur un autre appareil, à quelques instants près. On ne traite jamais deux
+      // fois la même demande, pour ne jamais créditer ou compter deux fois.
+      if(typeof showToast === 'function') showToast('Déjà traitée entre-temps par quelqu\'un d\'autre — aucune double validation effectuée.');
+      renderDirectionRequests();
+      return;
+    }
     list[idx].status = 'accepted';
     list[idx].acceptedAt = Date.now();
     saveRequests(list);
@@ -4560,6 +4821,11 @@
     const list = loadRequests();
     const idx = list.findIndex(r => r.id === id);
     if(idx === -1) return;
+    if(list[idx].status !== 'pending'){
+      if(typeof showToast === 'function') showToast('Déjà traitée entre-temps par quelqu\'un d\'autre.');
+      renderDirectionRequests();
+      return;
+    }
     list[idx].status = 'refused';
     list[idx].refusalReason = reason;
     saveRequests(list);
@@ -7191,6 +7457,560 @@
      déjà géré par le mécanisme de lightbox global existant ailleurs dans l'appli
      (voir imageLightbox / openImageLightbox, posé une fois pour toute l'application). */
 
+  /* ================================================================
+     ONGLET "SITE" (Direction) : apparence, diagnostic, dépannage des
+     demandes, sauvegarde — regroupe et étend les outils déjà existants.
+     ================================================================ */
+
+  /* ---- Apparence / thème personnalisé ---- */
+  const LS_THEME_KEY = 'echonews_custom_theme';
+  const DEFAULT_THEME = { gold: '#1857a4', emerald: '#16a874', amber: '#e08a1e', red: '#dc3f4a', bg: '#eef2f8' };
+  function loadCustomTheme(){ return loadJsonKey(LS_THEME_KEY, {}); }
+  function saveCustomTheme(theme){ saveJsonKey(LS_THEME_KEY, theme); }
+  function applyCustomTheme(){
+    const theme = loadCustomTheme();
+    const root = document.documentElement;
+    Object.keys(DEFAULT_THEME).forEach(key => {
+      if(theme[key]) root.style.setProperty('--' + key, theme[key]);
+    });
+  }
+  applyCustomTheme(); // dès le chargement, avant même la connexion, pour que
+                      // tout le monde voie immédiatement les couleurs choisies.
+  function renderThemeForm(){
+    const theme = Object.assign({}, DEFAULT_THEME, loadCustomTheme());
+    const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val; };
+    setVal('themeColorGold', theme.gold);
+    setVal('themeColorEmerald', theme.emerald);
+    setVal('themeColorAmber', theme.amber);
+    setVal('themeColorRed', theme.red);
+    setVal('themeColorBg', theme.bg);
+  }
+  const applyThemeBtn = document.getElementById('applyThemeBtn');
+  if(applyThemeBtn){
+    applyThemeBtn.addEventListener('click', () => {
+      const theme = {
+        gold: document.getElementById('themeColorGold').value,
+        emerald: document.getElementById('themeColorEmerald').value,
+        amber: document.getElementById('themeColorAmber').value,
+        red: document.getElementById('themeColorRed').value,
+        bg: document.getElementById('themeColorBg').value
+      };
+      saveCustomTheme(theme);
+      applyCustomTheme();
+      logEventAudit('theme_change', 'Couleurs du site modifiées par la Direction.');
+      addLog('La Direction a modifié les couleurs du site.');
+      const resultEl = document.getElementById('themeApplyResult');
+      if(resultEl) resultEl.innerHTML = '<p style="color:var(--emerald); font-size:13px; margin-top:10px;">✓ Couleurs appliquées et enregistrées pour tout le monde.</p>';
+      showSavedIndicator();
+    });
+  }
+  const resetThemeBtn = document.getElementById('resetThemeBtn');
+  if(resetThemeBtn){
+    resetThemeBtn.addEventListener('click', () => {
+      saveCustomTheme({});
+      const root = document.documentElement;
+      Object.keys(DEFAULT_THEME).forEach(key => root.style.removeProperty('--' + key));
+      renderThemeForm();
+      logEventAudit('theme_reset', 'Couleurs du site réinitialisées par la Direction.');
+      addLog('La Direction a réinitialisé les couleurs du site.');
+      const resultEl = document.getElementById('themeApplyResult');
+      if(resultEl) resultEl.innerHTML = '<p style="color:var(--text-dim); font-size:13px; margin-top:10px;">✓ Couleurs par défaut restaurées pour tout le monde.</p>';
+      showSavedIndicator();
+    });
+  }
+
+  /* ---- Diagnostic ---- */
+  function renderDiagnosticStatus(){
+    const connEl = document.getElementById('diagConnStatus');
+    const lastSyncEl = document.getElementById('diagLastSync');
+    const pendingEl = document.getElementById('diagPendingPush');
+    if(connEl) connEl.textContent = (typeof cloudReady !== 'undefined' && cloudReady) ? '✓ Connecté' : '⏳ En cours...';
+    if(lastSyncEl){
+      const ts = (typeof window.getLastSuccessfulSyncAt === 'function') ? window.getLastSuccessfulSyncAt() : null;
+      lastSyncEl.textContent = ts ? new Date(ts).toLocaleTimeString('fr-FR') : 'Pas encore';
+    }
+    if(pendingEl) pendingEl.textContent = (typeof cloudPushTimer !== 'undefined' && cloudPushTimer) ? 'Oui' : 'Non';
+
+    const volumeEl = document.getElementById('dataVolumeList');
+    if(volumeEl){
+      const counts = [
+        ['Demandes (annonces + rechargements)', loadRequests().length],
+        ['Comptes employés', loadEmployeeAccounts().length],
+        ['Grades', loadGrades().length],
+        ['Avis', loadReviews().length],
+        ['Historique entreprises', loadCompanyHistory().length],
+        ['Ligne de salaire', loadSalaryLedger().length]
+      ];
+      volumeEl.innerHTML = counts.map(([label, n]) => `
+        <div class="account-row"><span class="aname">${escapeHtml(label)}</span><span class="acreds">${n}</span></div>
+      `).join('');
+    }
+  }
+  const runDiagnosticBtn = document.getElementById('runDiagnosticBtn');
+  if(runDiagnosticBtn){
+    runDiagnosticBtn.addEventListener('click', () => {
+      const resultEl = document.getElementById('diagnosticResult');
+      if(!resultEl) return;
+      resultEl.innerHTML = '<p class="requests-empty">Diagnostic en cours...</p>';
+      const findings = [];
+      const requests = loadRequests();
+      const ids = requests.map(r => r.id);
+      const dupIds = ids.filter((id, i) => ids.indexOf(id) !== i);
+      if(dupIds.length) findings.push(`⚠️ ${dupIds.length} identifiant(s) de demande en double détecté(s).`);
+      const badReq = requests.filter(r => !r.company || !r.status);
+      if(badReq.length) findings.push(`⚠️ ${badReq.length} demande(s) avec des informations incomplètes.`);
+      const negBalances = Object.entries(loadBalances()).filter(([, v]) => v < 0);
+      if(negBalances.length) findings.push(`ℹ️ ${negBalances.length} entreprise(s) avec un solde brut négatif (normal si des diffusions ont eu lieu sans recharge récente) : ${negBalances.map(([k]) => k).join(', ')}.`);
+      const doPing = () => {
+        if(!cloudDocRef){
+          findings.push('❌ Connexion au serveur non initialisée.');
+          resultEl.innerHTML = findings.map(f => `<p style="font-size:13px; margin:4px 0;">${f}</p>`).join('') || '<p style="color:var(--emerald); font-size:13px;">✓ Aucun souci détecté.</p>';
+          return;
+        }
+        cloudDocRef.get().then(() => {
+          findings.unshift('✓ Le serveur répond correctement.');
+          resultEl.innerHTML = findings.map(f => `<p style="font-size:13px; margin:4px 0;">${f}</p>`).join('');
+        }).catch(() => {
+          findings.unshift('❌ Le serveur ne répond pas — vérifie ta connexion internet.');
+          resultEl.innerHTML = findings.map(f => `<p style="font-size:13px; margin:4px 0;">${f}</p>`).join('');
+        });
+      };
+      doPing();
+    });
+  }
+
+  /* ---- Demandes : dépannage avancé ---- */
+  function renderSiteRequestsAdmin(){
+    const container = document.getElementById('siteRequestsAdminList');
+    if(!container) return;
+    const search = (document.getElementById('siteReqSearch').value || '').toLowerCase().trim();
+    const statusFilter = document.getElementById('siteReqStatusFilter').value;
+    let list = loadRequests();
+    if(statusFilter) list = list.filter(r => r.status === statusFilter);
+    if(search) list = list.filter(r => (r.company || '').toLowerCase().includes(search) || (r.text || '').toLowerCase().includes(search));
+    list = list.slice().sort((a, b) => (b._modifiedAt || 0) - (a._modifiedAt || 0));
+
+    container.innerHTML = list.length === 0
+      ? '<p class="requests-empty">Aucune demande ne correspond.</p>'
+      : list.map(r => `
+        <div class="active-ad-card" data-req-id="${escapeHtml(r.id)}">
+          <div class="active-ad-top">
+            <span class="aacompany">${escapeHtml(r.company)} ${r.isRecharge ? '(rechargement)' : '(annonce)'}</span>
+            <span class="badge ${r.status === 'accepted' ? 'accepted' : 'hidden'}">${r.status}</span>
+          </div>
+          <div class="cs-counts">${escapeHtml((r.text || '').slice(0, 100))}${(r.text || '').length > 100 ? '…' : ''}</div>
+          <div class="request-actions" style="margin-top:8px;">
+            <label style="font-size:11.5px; color:var(--text-dim); display:flex; align-items:center; gap:6px;">
+              Statut :
+              <select data-action="site-status" data-id="${escapeHtml(r.id)}">
+                <option value="pending" ${r.status === 'pending' ? 'selected' : ''}>En attente</option>
+                <option value="accepted" ${r.status === 'accepted' ? 'selected' : ''}>Acceptée</option>
+                <option value="refused" ${r.status === 'refused' ? 'selected' : ''}>Refusée</option>
+              </select>
+            </label>
+            <button class="btn-refuse" data-action="site-delete" data-id="${escapeHtml(r.id)}">Supprimer définitivement</button>
+          </div>
+        </div>
+      `).join('');
+  }
+  ['siteReqSearch', 'siteReqStatusFilter'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.addEventListener(id === 'siteReqSearch' ? 'input' : 'change', renderSiteRequestsAdmin);
+  });
+  (function setupSiteRequestsDelegation(){
+    const container = document.getElementById('siteRequestsAdminList');
+    if(!container || container.dataset.siteReqDelegationReady) return;
+    container.dataset.siteReqDelegationReady = '1';
+    container.addEventListener('change', (e) => {
+      const sel = e.target.closest('select[data-action="site-status"]');
+      if(!sel) return;
+      const list = loadRequests();
+      const req = list.find(r => r.id === sel.dataset.id);
+      if(!req) return;
+      const oldStatus = req.status;
+      req.status = sel.value;
+      saveRequests(list);
+      const by = session ? session.name : 'Direction';
+      addLog(`[Dépannage Site] Statut d'une demande de <b>${escapeHtml(req.company)}</b> changé manuellement de "${oldStatus}" à "${sel.value}" par <b>${escapeHtml(by)}</b>.`);
+      renderSiteRequestsAdmin();
+      showSavedIndicator();
+    });
+    container.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-action="site-delete"]');
+      if(!btn) return;
+      const ok = window.confirm('Supprimer définitivement cette demande ? Cette action est irréversible et ne rend aucun crédit automatiquement.');
+      if(!ok) return;
+      const list = loadRequests();
+      const req = list.find(r => r.id === btn.dataset.id);
+      saveRequests(list.filter(r => r.id !== btn.dataset.id));
+      const by = session ? session.name : 'Direction';
+      if(req) addLog(`[Dépannage Site] Demande de <b>${escapeHtml(req.company)}</b> supprimée manuellement par <b>${escapeHtml(by)}</b>.`);
+      renderSiteRequestsAdmin();
+      showSavedIndicator();
+    });
+  })();
+
+  /* ---- Sauvegarde (boutons dupliqués de Paramétrage, mêmes actions) ---- */
+  const siteForceResyncBtn = document.getElementById('siteForceResyncBtn');
+  if(siteForceResyncBtn){
+    siteForceResyncBtn.addEventListener('click', () => {
+      const other = document.getElementById('forceResyncBtn');
+      if(other) other.click();
+    });
+  }
+  const siteExportBackupBtn = document.getElementById('siteExportBackupBtn');
+  if(siteExportBackupBtn){
+    siteExportBackupBtn.addEventListener('click', () => {
+      const other = document.getElementById('exportBackupBtn');
+      if(other) other.click();
+    });
+  }
+
+  /* ---- Resynchroniser tout le monde (signal diffusé à tous les appareils) ---- */
+  const globalResyncBtn = document.getElementById('globalResyncBtn');
+  if(globalResyncBtn){
+    globalResyncBtn.addEventListener('click', () => {
+      if(!cloudDocRef){
+        const r = document.getElementById('globalResyncResult');
+        if(r) r.innerHTML = '<p style="color:var(--red); font-size:13px; margin-top:10px;">Connexion au serveur indisponible.</p>';
+        return;
+      }
+      globalResyncBtn.disabled = true;
+      const original = globalResyncBtn.textContent;
+      globalResyncBtn.textContent = 'Envoi du signal...';
+      cloudDocRef.set({ _globalResyncRequestedAt: Date.now() }, { merge: true }).then(() => {
+        const by = session ? session.name : 'Direction';
+        addLog(`<b>${escapeHtml(by)}</b> a déclenché une resynchronisation forcée pour tous les appareils connectés.`);
+        const r = document.getElementById('globalResyncResult');
+        if(r) r.innerHTML = '<p style="color:var(--emerald); font-size:13px; margin-top:10px;">✓ Signal envoyé — tous les appareils connectés vont se resynchroniser dans les prochaines secondes.</p>';
+        globalResyncBtn.disabled = false;
+        globalResyncBtn.textContent = original;
+        showSavedIndicator();
+      }).catch(() => {
+        const r = document.getElementById('globalResyncResult');
+        if(r) r.innerHTML = '<p style="color:var(--red); font-size:13px; margin-top:10px;">Échec de l\'envoi du signal — vérifie ta connexion.</p>';
+        globalResyncBtn.disabled = false;
+        globalResyncBtn.textContent = original;
+      });
+    });
+  }
+
+  /* ---- Mode maintenance (formulaire Site → Maintenance) ---- */
+  function renderMaintenanceForm(){
+    const mode = loadMaintenanceMode();
+    const enabledSel = document.getElementById('maintenanceEnabled');
+    const msgInput = document.getElementById('maintenanceMessage');
+    if(enabledSel) enabledSel.value = mode.enabled ? '1' : '0';
+    if(msgInput && mode.message) msgInput.value = mode.message;
+  }
+  const saveMaintenanceBtn = document.getElementById('saveMaintenanceBtn');
+  if(saveMaintenanceBtn){
+    saveMaintenanceBtn.addEventListener('click', () => {
+      const enabled = document.getElementById('maintenanceEnabled').value === '1';
+      const message = document.getElementById('maintenanceMessage').value.trim();
+      const by = session ? session.name : 'Direction';
+      saveMaintenanceMode({ enabled, message, changedAt: Date.now(), changedBy: by });
+      addLog(`La Direction a ${enabled ? 'activé' : 'désactivé'} le mode maintenance du site.`);
+      if(typeof logEventAudit === 'function') logEventAudit('maintenance_change', `Mode maintenance ${enabled ? 'activé' : 'désactivé'} par ${by}.`);
+      const r = document.getElementById('maintenanceSaveResult');
+      if(r) r.innerHTML = `<p style="color:${enabled ? 'var(--red)' : 'var(--emerald)'}; font-size:13px; margin-top:10px;">✓ Mode maintenance ${enabled ? 'activé' : 'désactivé'}.</p>`;
+      showSavedIndicator();
+    });
+  }
+
+  /* ================================================================
+     PAGES PERSONNALISÉES : onglets créés par la Direction, avec
+     sous-sections et contenu (texte, titres, listes, liens, images).
+     ================================================================ */
+  const LS_CUSTOM_PAGES_KEY = 'echonews_custom_pages';
+  function loadCustomPages(){ return loadJsonKey(LS_CUSTOM_PAGES_KEY, []); }
+  function saveCustomPages(list){ saveJsonKey(LS_CUSTOM_PAGES_KEY, list); }
+
+  // Mise en forme "markdown allégé" : # Titre, ## Sous-titre, **gras**,
+  // - liste à puces, [texte](url) lien. Tout le reste est échappé (sécurité).
+  function parseLiteMarkdown(text){
+    if(!text) return '';
+    const lines = String(text).split('\n');
+    let html = '';
+    let inList = false;
+    const closeList = () => { if(inList){ html += '</ul>'; inList = false; } };
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if(trimmed === ''){ closeList(); html += '<br>'; return; }
+      let escaped = escapeHtml(trimmed);
+      escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+      escaped = escaped.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+      if(trimmed.startsWith('## ')){
+        closeList();
+        html += `<h3>${escaped.replace(/^##\s?/, '')}</h3>`;
+      }else if(trimmed.startsWith('# ')){
+        closeList();
+        html += `<h2>${escaped.replace(/^#\s?/, '')}</h2>`;
+      }else if(trimmed.startsWith('- ')){
+        if(!inList){ html += '<ul>'; inList = true; }
+        html += `<li>${escaped.replace(/^-\s?/, '')}</li>`;
+      }else{
+        closeList();
+        html += `<p>${escaped}</p>`;
+      }
+    });
+    closeList();
+    return html;
+  }
+
+  let cpEditingId = null; // null = création d'un nouvel onglet
+  let cpDraftSections = [];
+
+  function renderCustomPagesList(){
+    const container = document.getElementById('customPagesList');
+    if(!container) return;
+    const pages = loadCustomPages();
+    container.innerHTML = pages.length === 0
+      ? '<p class="requests-empty">Aucun onglet personnalisé pour le moment.</p>'
+      : pages.map(p => `
+        <div class="account-row" data-page-id="${escapeHtml(p.id)}">
+          <span class="aname">${escapeHtml(p.icon || '📄')} ${escapeHtml(p.title)}</span>
+          <span class="acreds">${(p.sections || []).length} sous-section(s) — ${p.visibility === 'direction' ? 'Direction uniquement' : 'Tout le monde'}</span>
+          <button data-action="cp-edit" data-id="${escapeHtml(p.id)}">Modifier</button>
+          <button data-action="cp-delete" data-id="${escapeHtml(p.id)}">Supprimer</button>
+        </div>
+      `).join('');
+  }
+  (function setupCustomPagesListDelegation(){
+    const container = document.getElementById('customPagesList');
+    if(!container || container.dataset.cpListDelegationReady) return;
+    container.dataset.cpListDelegationReady = '1';
+    container.addEventListener('click', (e) => {
+      const editBtn = e.target.closest('button[data-action="cp-edit"]');
+      if(editBtn){ openCustomPageEditor(editBtn.dataset.id); return; }
+      const delBtn = e.target.closest('button[data-action="cp-delete"]');
+      if(delBtn){
+        const ok = window.confirm('Supprimer définitivement cet onglet personnalisé ?');
+        if(!ok) return;
+        saveCustomPages(loadCustomPages().filter(p => p.id !== delBtn.dataset.id));
+        renderCustomPagesList();
+        injectCustomPagesIntoNav();
+        addLog('Un onglet personnalisé a été supprimé par la Direction.');
+        showSavedIndicator();
+        return;
+      }
+    });
+  })();
+
+  function renderCpSectionsEditor(){
+    const container = document.getElementById('cpSectionsEditor');
+    if(!container) return;
+    container.innerHTML = cpDraftSections.map((s, i) => `
+      <div class="cp-section-row" data-idx="${i}">
+        <input type="text" class="cp-sec-title" placeholder="Titre de la sous-section" value="${escapeHtml(s.title || '')}">
+        <textarea class="cp-sec-text" placeholder="# Titre&#10;## Sous-titre&#10;**gras**&#10;- élément de liste&#10;[texte du lien](https://...)">${escapeHtml(s.text || '')}</textarea>
+        <label class="file-upload-btn">📁 Image (optionnelle)<input type="file" accept="image/*" class="cp-sec-image-input"></label>
+        <span class="cp-sec-image-name" style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-dim); margin-left:8px;">${s.image ? '✓ Image ajoutée' : ''}</span>
+        <div class="cp-section-actions" style="margin-top:10px;">
+          <button type="button" class="cp-sec-up">▲ Monter</button>
+          <button type="button" class="cp-sec-down">▼ Descendre</button>
+          <button type="button" class="cp-sec-remove">🗑️ Supprimer</button>
+        </div>
+      </div>
+    `).join('');
+  }
+  function readCpSectionsFromEditor(){
+    const rows = document.querySelectorAll('#cpSectionsEditor .cp-section-row');
+    return Array.from(rows).map((row, i) => ({
+      id: cpDraftSections[i] && cpDraftSections[i].id ? cpDraftSections[i].id : 'sec_' + Date.now() + '_' + i,
+      title: row.querySelector('.cp-sec-title').value.trim() || 'Section',
+      text: row.querySelector('.cp-sec-text').value,
+      image: cpDraftSections[i] ? cpDraftSections[i].image : null
+    }));
+  }
+  (function setupCpSectionsDelegation(){
+    const container = document.getElementById('cpSectionsEditor');
+    if(!container || container.dataset.cpSecDelegationReady) return;
+    container.dataset.cpSecDelegationReady = '1';
+    container.addEventListener('click', (e) => {
+      const row = e.target.closest('.cp-section-row');
+      if(!row) return;
+      const idx = parseInt(row.dataset.idx, 10);
+      cpDraftSections = readCpSectionsFromEditor();
+      if(e.target.closest('.cp-sec-remove')){
+        cpDraftSections.splice(idx, 1);
+      }else if(e.target.closest('.cp-sec-up') && idx > 0){
+        const tmp = cpDraftSections[idx - 1]; cpDraftSections[idx - 1] = cpDraftSections[idx]; cpDraftSections[idx] = tmp;
+      }else if(e.target.closest('.cp-sec-down') && idx < cpDraftSections.length - 1){
+        const tmp = cpDraftSections[idx + 1]; cpDraftSections[idx + 1] = cpDraftSections[idx]; cpDraftSections[idx] = tmp;
+      }else{
+        return;
+      }
+      renderCpSectionsEditor();
+    });
+    container.addEventListener('change', (e) => {
+      const fileInput = e.target.closest('.cp-sec-image-input');
+      if(fileInput){
+        const row = fileInput.closest('.cp-section-row');
+        const idx = parseInt(row.dataset.idx, 10);
+        const file = fileInput.files && fileInput.files[0];
+        if(!file) return;
+        cpDraftSections = readCpSectionsFromEditor();
+        const reader = new FileReader();
+        reader.onload = () => {
+          cpDraftSections[idx].image = reader.result;
+          renderCpSectionsEditor();
+        };
+        reader.readAsDataURL(file);
+        return;
+      }
+      cpDraftSections = readCpSectionsFromEditor();
+    });
+  })();
+
+  const cpAddSectionBtn = document.getElementById('cpAddSectionBtn');
+  if(cpAddSectionBtn){
+    cpAddSectionBtn.addEventListener('click', () => {
+      cpDraftSections = readCpSectionsFromEditor();
+      cpDraftSections.push({ id: 'sec_' + Date.now(), title: '', text: '', image: null });
+      renderCpSectionsEditor();
+    });
+  }
+
+  function openCustomPageEditor(pageId){
+    const editorBlock = document.getElementById('customPageEditorBlock');
+    const titleEl = document.getElementById('customPageEditorTitle');
+    if(!editorBlock) return;
+    if(pageId){
+      const page = loadCustomPages().find(p => p.id === pageId);
+      if(!page) return;
+      cpEditingId = pageId;
+      titleEl.textContent = "Modifier l'onglet";
+      document.getElementById('cpIcon').value = page.icon || '📄';
+      document.getElementById('cpTitle').value = page.title || '';
+      document.getElementById('cpVisibility').value = page.visibility || 'all';
+      cpDraftSections = JSON.parse(JSON.stringify(page.sections || []));
+    }else{
+      cpEditingId = null;
+      titleEl.textContent = 'Nouvel onglet';
+      document.getElementById('cpIcon').value = '📄';
+      document.getElementById('cpTitle').value = '';
+      document.getElementById('cpVisibility').value = 'all';
+      cpDraftSections = [{ id: 'sec_' + Date.now(), title: 'Accueil', text: '', image: null }];
+    }
+    renderCpSectionsEditor();
+    editorBlock.style.display = 'block';
+    document.getElementById('cpSaveResult').innerHTML = '';
+  }
+
+  const newCustomPageBtn = document.getElementById('newCustomPageBtn');
+  if(newCustomPageBtn){
+    newCustomPageBtn.addEventListener('click', () => openCustomPageEditor(null));
+  }
+  const cpCancelBtn = document.getElementById('cpCancelBtn');
+  if(cpCancelBtn){
+    cpCancelBtn.addEventListener('click', () => {
+      document.getElementById('customPageEditorBlock').style.display = 'none';
+    });
+  }
+  const cpSaveBtn = document.getElementById('cpSaveBtn');
+  if(cpSaveBtn){
+    cpSaveBtn.addEventListener('click', () => {
+      const title = document.getElementById('cpTitle').value.trim();
+      const icon = document.getElementById('cpIcon').value.trim() || '📄';
+      const visibility = document.getElementById('cpVisibility').value;
+      const resultEl = document.getElementById('cpSaveResult');
+      if(!title){
+        resultEl.innerHTML = '<p style="color:var(--red); font-size:13px; margin-top:10px;">Le nom de l\'onglet est obligatoire.</p>';
+        return;
+      }
+      cpDraftSections = readCpSectionsFromEditor();
+      if(cpDraftSections.length === 0){
+        resultEl.innerHTML = '<p style="color:var(--red); font-size:13px; margin-top:10px;">Ajoute au moins une sous-section.</p>';
+        return;
+      }
+      const pages = loadCustomPages();
+      const by = session ? session.name : 'Direction';
+      if(cpEditingId){
+        const idx = pages.findIndex(p => p.id === cpEditingId);
+        if(idx !== -1){
+          pages[idx] = Object.assign({}, pages[idx], { title, icon, visibility, sections: cpDraftSections });
+        }
+        addLog(`L'onglet personnalisé "<b>${escapeHtml(title)}</b>" a été modifié par <b>${escapeHtml(by)}</b>.`);
+      }else{
+        pages.push({ id: 'page_' + Date.now(), title, icon, visibility, sections: cpDraftSections, createdBy: by, createdAt: Date.now() });
+        addLog(`Nouvel onglet personnalisé "<b>${escapeHtml(title)}</b>" créé par <b>${escapeHtml(by)}</b>.`);
+      }
+      saveCustomPages(pages);
+      renderCustomPagesList();
+      injectCustomPagesIntoNav();
+      document.getElementById('customPageEditorBlock').style.display = 'none';
+      showSavedIndicator();
+    });
+  }
+
+  // Construit dynamiquement les boutons de la nav principale + les panneaux
+  // correspondants, à partir des onglets personnalisés enregistrés. Rejoué à
+  // chaque changement (création, modification, suppression, synchronisation).
+  function injectCustomPagesIntoNav(){
+    const nav = document.querySelector('nav.tabs');
+    const main = document.querySelector('main');
+    if(!nav || !main) return;
+    const pages = loadCustomPages();
+    const isDirectionViewer = session && session.role === 'direction';
+
+    // On retire d'abord tout ce qui a été injecté précédemment, pour repartir propre.
+    nav.querySelectorAll('button[data-custom-page]').forEach(b => b.remove());
+    main.querySelectorAll('section.panel[data-custom-page]').forEach(p => p.remove());
+
+    const avisBtn = document.getElementById('tabBtnAvis');
+    pages.forEach(page => {
+      if(page.visibility === 'direction' && !isDirectionViewer) return;
+      const panelId = 'custom_' + page.id;
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.setAttribute('role', 'tab');
+      btn.dataset.target = panelId;
+      btn.dataset.customPage = '1';
+      btn.textContent = `${page.icon || '📄'} ${page.title}`;
+      if(avisBtn) nav.insertBefore(btn, avisBtn); else nav.appendChild(btn);
+
+      const section = document.createElement('section');
+      section.className = 'panel';
+      section.id = panelId;
+      section.dataset.customPage = '1';
+      const hasMultiple = (page.sections || []).length > 1;
+      let inner = '';
+      if(hasMultiple){
+        inner += '<nav class="subtabs" role="tablist">' +
+          page.sections.map((s, i) => `<button class="subtab${i === 0 ? ' active' : ''}" role="tab" data-subtarget="${panelId}_${s.id}">${escapeHtml(s.title)}</button>`).join('') +
+          '</nav>';
+      }
+      inner += page.sections.map((s, i) => `
+        <div class="subpanel cp-content${!hasMultiple || i === 0 ? ' active' : ''}" id="${panelId}_${s.id}">
+          ${!hasMultiple ? `<h2 style="font-family:'Sora',sans-serif; margin-bottom:14px;">${escapeHtml(s.title)}</h2>` : ''}
+          ${s.image ? `<img src="${s.image}" alt="">` : ''}
+          ${parseLiteMarkdown(s.text)}
+        </div>
+      `).join('');
+      section.innerHTML = inner;
+      main.appendChild(section);
+
+      // Câblage des sous-onglets propres à cette page (créés après le chargement
+      // initial, donc pas pris en compte par le câblage générique des .subtabs).
+      if(hasMultiple){
+        const subNav = section.querySelector('.subtabs');
+        if(subNav){
+          subNav.addEventListener('click', (e) => {
+            const subBtn = e.target.closest('.subtab');
+            if(!subBtn) return;
+            subNav.querySelectorAll('.subtab').forEach(b => b.classList.remove('active'));
+            subBtn.classList.add('active');
+            section.querySelectorAll('.subpanel').forEach(p => p.classList.remove('active'));
+            const target = document.getElementById(subBtn.dataset.subtarget);
+            if(target) target.classList.add('active');
+          });
+        }
+      }
+    });
+  }
+
   function renderGradesManagement(){
     const gradesContainer = document.getElementById('gradesList');
     const empContainer = document.getElementById('employeeGradeList');
@@ -8350,7 +9170,8 @@
     'echonews_company_payments', 'echonews_reviews', 'echonews_salary_ledger', 'echonews_tombstones',
     'echonews_chats', 'echonews_ticker_messages',
     'echonews_wheel_config', 'echonews_wheel_config_published', 'echonews_wheel_spins',
-    'echonews_event_audit_log', 'echonews_map_timestamps'
+    'echonews_event_audit_log', 'echonews_map_timestamps', 'echonews_custom_theme', 'echonews_maintenance_mode',
+    'echonews_custom_pages'
   ];
 
   let cloudDb = null;
@@ -8507,7 +9328,7 @@
         _origSetItem(key, finalValue);
         if(cloudReady && !cloudApplyingRemote && CLOUD_SYNCED_KEYS.includes(key)){
           clearTimeout(cloudPushTimer);
-          cloudPushTimer = setTimeout(pushStateToCloud, 700);
+          cloudPushTimer = setTimeout(pushStateToCloud, 400);
         }
       };
 
@@ -8676,7 +9497,7 @@
           'applyEmployeeDirectionAccess', 'renderRechargeRecap',
           'renderEntChatThread', 'renderDirChatThread', 'checkForNewChatMessages', 'renderTickerBanner',
           'renderWheelPlay', 'renderWheelAdminForm',
-          'renderEventStats', 'renderEventAudit'
+          'renderEventStats', 'renderEventAudit', 'applyCustomTheme', 'injectCustomPagesIntoNav'
           // 'applySession' retiré volontairement : il forçait un retour sur l'onglet
           // principal du rôle et un scroll en haut de page à CHAQUE synchronisation
           // cloud (y compris pour ses propres actions), ce qui donnait l'impression
@@ -8690,11 +9511,15 @@
 
       let cloudUnsubscribe = null;
       let cloudReconnectAttempts = 0;
+      let lastSuccessfulSyncAt = null;
+      let lastHandledGlobalResync = null; // 'null' = pas encore vu de premier snapshot
+      window.getLastSuccessfulSyncAt = () => lastSuccessfulSyncAt;
 
       function attachCloudListener(){
         if(cloudUnsubscribe){ try{ cloudUnsubscribe(); }catch(e){} }
         cloudUnsubscribe = cloudDocRef.onSnapshot((snap) => {
           cloudReconnectAttempts = 0; // la connexion fonctionne, on repart à zéro
+          lastSuccessfulSyncAt = Date.now();
           if(snap.exists){
             const data = snap.data();
             cloudApplyingRemote = true;
@@ -8717,6 +9542,28 @@
             cloudApplyingRemote = false;
             cloudReady = true;
             if(anyChange) refreshAllViewsFromCloud();
+
+            // Signal "resynchroniser tout le monde" envoyé par la Direction depuis
+            // Site → Sauvegarde : chaque appareil qui le reçoit adopte immédiatement
+            // la version du serveur pour toutes les clés, sans attendre le prochain
+            // cycle de 2 secondes.
+            if(typeof data._globalResyncRequestedAt === 'number' && data._globalResyncRequestedAt !== lastHandledGlobalResync){
+              const isFirstSnapshotEver = (lastHandledGlobalResync === null);
+              lastHandledGlobalResync = data._globalResyncRequestedAt;
+              if(!isFirstSnapshotEver){
+                CLOUD_SYNCED_KEYS.forEach(k => {
+                  if(!Object.prototype.hasOwnProperty.call(data, k)) return;
+                  const localRaw = _origGetItem(k);
+                  if(data[k] !== localRaw){
+                    cloudApplyingRemote = true;
+                    _origSetItem(k, data[k]);
+                    cloudApplyingRemote = false;
+                  }
+                });
+                refreshAllViewsFromCloud();
+                if(typeof showToast === 'function') showToast('🔄 Resynchronisation demandée par la Direction — données à jour.');
+              }
+            }
           }else{
             // Aucune donnée en ligne pour l'instant : on envoie l'état local actuel
             // pour amorcer la base (par exemple, tout premier lancement).
@@ -8757,7 +9604,7 @@
         });
       };
 
-      // Le serveur est la référence : toutes les 15 secondes (et immédiatement au
+      // Le serveur est la référence : toutes les 2 secondes (et immédiatement au
       // retour sur l'onglet), on adopte directement sa version plutôt que d'essayer
       // de "deviner" une fusion — à ce rythme, toute modification locale a déjà
       // largement eu le temps d'être envoyée (le délai d'envoi est de 700ms).
@@ -8769,6 +9616,7 @@
         if(cloudPushTimer) return; // un envoi local est en attente : on attend le prochain cycle
         cloudDocRef.get().then(snap => {
           if(!snap.exists) return;
+          lastSuccessfulSyncAt = Date.now();
           const data = snap.data();
           cloudApplyingRemote = true;
           let anyChange = false;
@@ -8784,13 +9632,17 @@
           if(anyChange) refreshAllViewsFromCloud();
         }).catch(err => cloudLog('Échec de la resynchronisation périodique :', err));
       }
-      setInterval(adoptServerState, 15000);
+      setInterval(adoptServerState, 2000);
 
       // Si l'onglet redevient visible après avoir été en arrière-plan (l'un des cas
       // les plus fréquents de connexion coupée), on adopte aussi immédiatement la
-      // version du serveur plutôt que d'attendre le prochain cycle de 15 secondes.
+      // version du serveur plutôt que d'attendre le prochain cycle de 2 secondes.
       document.addEventListener('visibilitychange', () => {
-        if(document.visibilityState === 'visible') adoptServerState();
+        if(document.visibilityState === 'visible'){
+          adoptServerState();
+        }else{
+          flushPendingPush();
+        }
       });
 
       // Piège classique sur mobile (surtout Safari iOS) : revenir sur la page via
@@ -8804,6 +9656,21 @@
       // téléphone (ou n'importe quel appareil), au cas où la première connexion
       // Firestore mettrait un instant à s'établir sur un réseau mobile plus lent.
       setTimeout(adoptServerState, 3000);
+
+      // Sur mobile, changer d'application ou verrouiller l'écran peut suspendre le
+      // JS presque immédiatement — bien avant que l'envoi différé (400ms) n'ait eu
+      // le temps de partir. On force donc l'envoi immédiat de tout ce qui est en
+      // attente dès que la page risque de passer en arrière-plan, plutôt que
+      // d'attendre le délai normal.
+      function flushPendingPush(){
+        if(cloudPushTimer){
+          clearTimeout(cloudPushTimer);
+          cloudPushTimer = null;
+          pushStateToCloud();
+        }
+      }
+      window.addEventListener('pagehide', flushPendingPush);
+      window.addEventListener('beforeunload', flushPendingPush);
 
       cloudLog('Connexion à Firestore initialisée.');
     }catch(e){
