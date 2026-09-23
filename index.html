@@ -1535,8 +1535,8 @@
               </div>
 
               <div class="field">
-                <label for="adCount">Nombre total d'annonces souhaité</label>
-                <input type="number" id="adCount" min="1" value="1">
+                <label for="adCount">Nombre total d'annonces souhaité (0 = calcul automatique selon la période, la plage horaire et la fréquence)</label>
+                <input type="number" id="adCount" min="0" value="1">
               </div>
 
               <div class="field">
@@ -2420,7 +2420,10 @@
             </div>
           </div>
           <p style="font-size:13px; color:var(--text-dim); margin:0 0 14px;">Solde postable actuel : <b id="creditCompanyBalance" style="color:var(--gold);">0</b> annonce(s)</p>
-          <button class="ad-submit" id="creditCompanyBtn" style="margin-bottom:10px;">Ajouter au solde</button>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+            <button class="ad-submit" id="creditCompanyBtn">Ajouter au solde</button>
+            <button class="ad-submit" id="debitCompanyBtn" style="background:var(--red); box-shadow:none;">Retirer du solde</button>
+          </div>
           <div id="creditCompanyResult"></div>
         </div>
 
@@ -3849,7 +3852,13 @@
         return isMultiTextMode() ? (getAllTexts().length || 1) : 1;
       }
       let c = parseInt(els.adCount.value, 10);
-      if(isNaN(c) || c < 1){ c = 1; }
+      if(isNaN(c) || c < 0){ return 1; }
+      if(c === 0){
+        // 0 = calcul automatique à partir de la période, la plage horaire et la
+        // fréquence choisies, au lieu d'un nombre saisi à la main.
+        const auto = calculateExactAdCount(els.dateStart.value, els.dateEnd.value, els.timeStart.value, els.timeEnd.value, currentFreq, getSelectedDays());
+        return auto > 0 ? auto : 1;
+      }
       return c;
     }
     function updateTotal(){
@@ -3887,10 +3896,10 @@
     }
 
     els.text.addEventListener('input', () => { updateCounter(); if(isMultiTextMode()) updateMultiTextUI(); });
-    els.dateStart.addEventListener('change', updatePeriod);
-    els.dateEnd.addEventListener('change', updatePeriod);
-    els.timeStart.addEventListener('change', updateHours);
-    els.timeEnd.addEventListener('change', updateHours);
+    els.dateStart.addEventListener('change', () => { updatePeriod(); updateTotal(); });
+    els.dateEnd.addEventListener('change', () => { updatePeriod(); updateTotal(); });
+    els.timeStart.addEventListener('change', () => { updateHours(); updateTotal(); });
+    els.timeEnd.addEventListener('change', () => { updateHours(); updateTotal(); });
     els.adCount.addEventListener('input', updateTotal);
     els.freqOptions.querySelectorAll('.freq-chip').forEach(chip => {
       chip.addEventListener('click', () => {
@@ -3898,6 +3907,7 @@
         chip.classList.add('selected');
         currentFreq = chip.dataset.freq;
         els.recapFreq.textContent = currentFreq;
+        updateTotal();
       });
     });
 
@@ -3910,7 +3920,7 @@
     }
     if(els.dayOptions){
       els.dayOptions.querySelectorAll('.freq-chip').forEach(chip => {
-        chip.addEventListener('click', () => { chip.classList.toggle('selected'); updateRecapDays(); });
+        chip.addEventListener('click', () => { chip.classList.toggle('selected'); updateRecapDays(); updateTotal(); });
       });
     }
 
@@ -4622,6 +4632,37 @@
   }
   function toISODate(d){
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+
+  // Calcule le nombre EXACT d'annonces que produirait une période/plage horaire/
+  // fréquence donnée (utilisé quand l'entreprise laisse "Nombre d'annonces" à 0 :
+  // au lieu de choisir un nombre à la main, le nombre se déduit automatiquement
+  // de la date de fin, l'heure de fin et la fréquence choisies).
+  function calculateExactAdCount(dateStart, dateEnd, timeStart, timeEnd, freq, days){
+    if(!dateStart || !dateEnd) return 0;
+    const step = FREQ_MINUTES[freq] || 60;
+    const startM = toMinutes(timeStart || '12:00');
+    const endM = toMinutes(timeEnd || '02:00');
+    let windowLen = endM - startM;
+    if(windowLen <= 0) windowLen += 24 * 60; // la plage traverse minuit
+    const offsets = (step >= 1440) ? [0] : (() => {
+      const arr = [];
+      for(let m = 0; m <= windowLen; m += step){ arr.push(m); }
+      return arr;
+    })();
+    const allowedDays = (days && days.length) ? days : null;
+    let cursor = new Date(dateStart + 'T00:00:00');
+    const end = new Date(dateEnd + 'T00:00:00');
+    if(isNaN(cursor.getTime()) || isNaN(end.getTime()) || end < cursor) return 0;
+    let total = 0;
+    let safety = 0;
+    while(cursor <= end && safety < 2000){
+      const dow = cursor.getDay();
+      if(!allowedDays || allowedDays.includes(dow)) total += offsets.length;
+      cursor = new Date(cursor.getTime() + 86400000);
+      safety++;
+    }
+    return total;
   }
 
   // Construit, pour une annonce acceptée, la liste de ses diffusions (date + heure)
@@ -6231,6 +6272,37 @@
       showSavedIndicator();
       if(resultEl){
         resultEl.innerHTML = `<p style="color:var(--gold); font-size:13px; margin-top:6px;">✓ ${escapeHtml(amount)} annonce(s) ajoutée(s) à ${escapeHtml(company)}. Nouveau solde postable : ${getCompanyPostableCount(company)}.</p>`;
+      }
+    });
+  }
+
+  const debitCompanyBtn = document.getElementById('debitCompanyBtn');
+  if(debitCompanyBtn){
+    debitCompanyBtn.addEventListener('click', () => {
+      const picker = document.getElementById('creditCompanyPicker');
+      const input = document.getElementById('creditAmountInput');
+      const resultEl = document.getElementById('creditCompanyResult');
+      const company = picker ? picker.value : '';
+      let amount = parseInt(input.value, 10);
+      if(!company || isNaN(amount) || amount < 1){
+        if(resultEl){
+          resultEl.innerHTML = '<p style="color:var(--red); font-size:13px; margin-top:6px;">Choisis une entreprise et un nombre d\'annonces valide (au moins 1).</p>';
+        }
+        return;
+      }
+      const currentPostable = getCompanyPostableCount(company);
+      if(amount > currentPostable){
+        const ok = window.confirm(`${company} n'a que ${currentPostable} annonce(s) postable(s). Retirer ${amount} ferait passer son solde en dessous de zéro. Continuer quand même ?`);
+        if(!ok) return;
+      }
+      adjustBalance(company, -amount);
+      addLog(`<b>${escapeHtml(amount)}</b> annonce(s) retirée(s) manuellement du solde de <b>${escapeHtml(company)}</b>.`);
+      logCompanyHistory(company, 'ad_refuse', `${amount} annonce(s) retirée(s) manuellement du solde par la Direction`, { by: session ? session.name : 'Direction' });
+      if(input) input.value = '';
+      renderCreditCompanyBalance();
+      showSavedIndicator();
+      if(resultEl){
+        resultEl.innerHTML = `<p style="color:var(--red); font-size:13px; margin-top:6px;">✓ ${escapeHtml(amount)} annonce(s) retirée(s) à ${escapeHtml(company)}. Nouveau solde postable : ${getCompanyPostableCount(company)}.</p>`;
       }
     });
   }
