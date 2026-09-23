@@ -3719,13 +3719,16 @@
     `).join('');
 
     if(isDirection){
-      container.querySelectorAll('button[data-action="delete-review"]').forEach(btn => {
-        btn.addEventListener('click', () => {
+      if(!container.dataset.deleteReviewDelegationReady){
+        container.dataset.deleteReviewDelegationReady = '1';
+        container.addEventListener('click', (e) => {
+          const btn = e.target.closest('button[data-action="delete-review"]');
+          if(!btn) return;
           saveReviews(loadReviews().filter(r => r.id !== btn.dataset.id));
           renderReviewsList();
           showSavedIndicator();
         });
-      });
+      }
     }
   }
 
@@ -4495,78 +4498,93 @@
       </div>
     `).join('');
 
-    container.querySelectorAll('button[data-action="accept"]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.id;
-        const list = loadRequests();
-        const idx = list.findIndex(r => r.id === id);
-        if(idx === -1) return;
-        list[idx].status = 'accepted';
-        list[idx].acceptedAt = Date.now();
-        saveRequests(list);
-        if(list[idx].isRecharge){
-          adjustBalance(list[idx].company, list[idx].count);
-          addLog(`Solde de <b>${escapeHtml(list[idx].company)}</b> rechargé de ${list[idx].count} annonce(s) (nouveau solde postable : ${getCompanyPostableCount(list[idx].company)}).`);
-        }
+    setupRequestActionsDelegation(container);
+  }
 
-        // Le montant validé compte immédiatement dans le Revenu / semaine et l'Impôt
-        // (comme une facturation manuelle, mais automatique à l'acceptation).
-        const payments = loadPayments();
-        payments.unshift({
-          id: 'pay_' + Date.now(),
-          company: list[idx].company,
-          amount: list[idx].total,
-          ts: Date.now(),
-          by: session ? session.name : 'Direction',
-          requestIds: [list[idx].id],
-          removedAdjustments: [],
-          manual: false,
-          label: list[idx].isRecharge ? 'Rechargement de solde' : 'Demande d\'annonce validée'
-        });
-        savePayments(payments);
+  function acceptRequestById(id){
+    const list = loadRequests();
+    const idx = list.findIndex(r => r.id === id);
+    if(idx === -1) return;
+    list[idx].status = 'accepted';
+    list[idx].acceptedAt = Date.now();
+    saveRequests(list);
+    if(list[idx].isRecharge){
+      adjustBalance(list[idx].company, list[idx].count);
+      addLog(`Solde de <b>${escapeHtml(list[idx].company)}</b> rechargé de ${list[idx].count} annonce(s) (nouveau solde postable : ${getCompanyPostableCount(list[idx].company)}).`);
+    }
 
-        addLogEntry(list[idx]);
-        renderDirectionRequests();
-        renderCompanySummary();
-        renderBroadcastPlanning();
-        renderOverviewStats();
-        if(typeof renderTax === 'function') renderTax();
-      });
+    // Le montant validé compte immédiatement dans le Revenu / semaine et l'Impôt
+    // (comme une facturation manuelle, mais automatique à l'acceptation).
+    const payments = loadPayments();
+    payments.unshift({
+      id: 'pay_' + Date.now(),
+      company: list[idx].company,
+      amount: list[idx].total,
+      ts: Date.now(),
+      by: session ? session.name : 'Direction',
+      requestIds: [list[idx].id],
+      removedAdjustments: [],
+      manual: false,
+      label: list[idx].isRecharge ? 'Rechargement de solde' : 'Demande d\'annonce validée'
     });
+    savePayments(payments);
 
-    container.querySelectorAll('button[data-action="refuse"]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.id;
-        const actionsZone = document.getElementById('actions_' + id);
-        if(!actionsZone) return;
-        actionsZone.innerHTML = `
-          <div class="field" style="width:100%;">
-            <label for="reason_${id}">Motif du refus (obligatoire)</label>
-            <input type="text" id="reason_${id}" placeholder="Ex : contenu non conforme à la charte éditoriale">
-          </div>
-          <div style="display:flex; gap:10px; margin-top:10px;">
-            <button class="btn-refuse" id="confirmRefuse_${id}">Confirmer le refus</button>
-            <button class="btn-hide" id="cancelRefuse_${id}">Annuler</button>
-          </div>
-        `;
-        document.getElementById('cancelRefuse_' + id).addEventListener('click', () => renderDirectionRequests());
-        document.getElementById('confirmRefuse_' + id).addEventListener('click', () => {
-          const reasonInput = document.getElementById('reason_' + id);
-          const reason = reasonInput.value.trim();
-          if(!reason){ reasonInput.focus(); return; }
-          const list = loadRequests();
-          const idx = list.findIndex(r => r.id === id);
-          if(idx === -1) return;
-          list[idx].status = 'refused';
-          list[idx].refusalReason = reason;
-          saveRequests(list);
-          addLogEntry(list[idx]);
-          renderDirectionRequests();
-          renderCompanySummary();
-          renderBroadcastPlanning();
-          renderOverviewStats();
-        });
-      });
+    addLogEntry(list[idx]);
+    renderDirectionRequests();
+    renderCompanySummary();
+    renderBroadcastPlanning();
+    renderOverviewStats();
+    if(typeof renderTax === 'function') renderTax();
+  }
+
+  function showRefuseFormFor(id){
+    const actionsZone = document.getElementById('actions_' + id);
+    if(!actionsZone) return;
+    actionsZone.innerHTML = `
+      <div class="field" style="width:100%;">
+        <label for="reason_${id}">Motif du refus (obligatoire)</label>
+        <input type="text" id="reason_${id}" placeholder="Ex : contenu non conforme à la charte éditoriale">
+      </div>
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        <button class="btn-refuse" data-action="confirm-refuse" data-id="${id}">Confirmer le refus</button>
+        <button class="btn-hide" data-action="cancel-refuse" data-id="${id}">Annuler</button>
+      </div>
+    `;
+  }
+
+  function confirmRefuseFor(id){
+    const reasonInput = document.getElementById('reason_' + id);
+    if(!reasonInput) return;
+    const reason = reasonInput.value.trim();
+    if(!reason){ reasonInput.focus(); return; }
+    const list = loadRequests();
+    const idx = list.findIndex(r => r.id === id);
+    if(idx === -1) return;
+    list[idx].status = 'refused';
+    list[idx].refusalReason = reason;
+    saveRequests(list);
+    addLogEntry(list[idx]);
+    renderDirectionRequests();
+    renderCompanySummary();
+    renderBroadcastPlanning();
+    renderOverviewStats();
+  }
+
+  // Délégation posée une seule fois par conteneur ("Demandes d'annonce" et
+  // "Demandes de rechargement" étant deux conteneurs séparés) : fonctionne de
+  // façon fiable quel que soit le nombre de demandes affichées ou de rafraîchissements.
+  function setupRequestActionsDelegation(container){
+    if(!container || container.dataset.reqActionsDelegationReady) return;
+    container.dataset.reqActionsDelegationReady = '1';
+    container.addEventListener('click', (e) => {
+      const acceptBtn = e.target.closest('button[data-action="accept"]');
+      if(acceptBtn){ acceptRequestById(acceptBtn.dataset.id); return; }
+      const refuseBtn = e.target.closest('button[data-action="refuse"]');
+      if(refuseBtn){ showRefuseFormFor(refuseBtn.dataset.id); return; }
+      const cancelBtn = e.target.closest('button[data-action="cancel-refuse"]');
+      if(cancelBtn){ renderDirectionRequests(); return; }
+      const confirmBtn = e.target.closest('button[data-action="confirm-refuse"]');
+      if(confirmBtn){ confirmRefuseFor(confirmBtn.dataset.id); return; }
     });
   }
 
@@ -5331,104 +5349,110 @@
 
     container.innerHTML = header + `<div class="schedule-grid">${rows}</div>`;
     container.scrollTop = savedScrollTop;
+    setupCompanyPlanningDelegation(container);
+  }
 
-    container.querySelectorAll('.ent-delete-occ-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const adId = btn.dataset.adId;
-        const occId = btn.dataset.occId;
-        const ok = window.confirm("Supprimer cette annonce non diffusée ? Elle disparaîtra du planning et le crédit vous sera rendu.");
-        if(!ok) return;
-        const list = loadRequests();
-        const ad = list.find(r => r.id === adId);
-        if(!ad) return;
-        if(!ad.excludedOccIds) ad.excludedOccIds = [];
-        if(!ad.excludedOccIds.includes(occId)) ad.excludedOccIds.push(occId);
-        saveRequests(list);
-        addLog(`<b>${escapeHtml(ad.company)}</b> a supprimé une annonce non diffusée de son planning (crédit récupéré).`);
-        logCompanyHistory(ad.company, 'ad_refuse', `Annonce non diffusée supprimée par l'entreprise : ${ad.text}`, { by: session.name });
-        renderCompanyPlanning();
-        renderCompanyProfile();
-        if(typeof renderBroadcastPlanning === 'function') renderBroadcastPlanning();
-      });
+  function deleteMissedOccurrence(adId, occId){
+    const ok = window.confirm("Supprimer cette annonce non diffusée ? Elle disparaîtra du planning et le crédit vous sera rendu.");
+    if(!ok) return;
+    const list = loadRequests();
+    const ad = list.find(r => r.id === adId);
+    if(!ad) return;
+    if(!ad.excludedOccIds) ad.excludedOccIds = [];
+    if(!ad.excludedOccIds.includes(occId)) ad.excludedOccIds.push(occId);
+    saveRequests(list);
+    addLog(`<b>${escapeHtml(ad.company)}</b> a supprimé une annonce non diffusée de son planning (crédit récupéré).`);
+    logCompanyHistory(ad.company, 'ad_refuse', `Annonce non diffusée supprimée par l'entreprise : ${ad.text}`, { by: session.name });
+    renderCompanyPlanning();
+    renderCompanyProfile();
+    if(typeof renderBroadcastPlanning === 'function') renderBroadcastPlanning();
+  }
+
+  function toggleCompanyOccEditZone(container, btn){
+    if(btn.disabled) return;
+    const adId = btn.dataset.adId;
+    const occId = btn.dataset.occId;
+    const zone = container.querySelector(`.ent-edit-zone[data-occ-edit-zone="${occId}"]`);
+    if(!zone) return;
+    const isOpen = zone.style.display !== 'none';
+    container.querySelectorAll('.ent-edit-zone').forEach(z => z.style.display = 'none');
+    if(isOpen){
+      companyPlanningEditingAdId = null;
+      return;
+    }
+    companyPlanningEditingAdId = occId;
+
+    const list = loadRequests();
+    const ad = list.find(r => r.id === adId);
+    if(!ad) return;
+    const currentText = (ad.occTextOverrides && ad.occTextOverrides[occId] !== undefined)
+      ? ad.occTextOverrides[occId]
+      : (ad.texts && ad.texts.length > 1 ? ad.texts[0] : ad.text);
+
+    zone.style.display = 'block';
+    zone.innerHTML = `
+      <div class="field" style="margin-bottom:10px;">
+        <label>Texte de cette annonce uniquement (150 caractères max)</label>
+        <textarea class="ent-edit-occ-text-input" maxlength="150">${escapeHtml(currentText)}</textarea>
+        <div class="counter-row">${Array.from(currentText).length} / 150</div>
+      </div>
+      <button type="button" class="ad-submit ent-edit-occ-save-btn">Enregistrer (cette annonce uniquement)</button>
+      <div class="ent-edit-result"></div>
+    `;
+
+    const ta = zone.querySelector('.ent-edit-occ-text-input');
+    ta.addEventListener('input', () => {
+      let arr = Array.from(ta.value);
+      if(arr.length > 150){ arr = arr.slice(0, 150); ta.value = arr.join(''); }
+      ta.nextElementSibling.textContent = arr.length + ' / 150';
     });
 
-    // Modification annonce par annonce : chaque occurrence a son propre bouton,
-    // son propre formulaire, et sa propre sauvegarde — modifier l'une ne touche
-    // jamais le texte des autres occurrences de la même demande, ni le solde.
-    container.querySelectorAll('.ent-edit-occ-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if(btn.disabled) return;
-        const adId = btn.dataset.adId;
-        const occId = btn.dataset.occId;
-        const zone = container.querySelector(`.ent-edit-zone[data-occ-edit-zone="${occId}"]`);
-        if(!zone) return;
-        const isOpen = zone.style.display !== 'none';
-        container.querySelectorAll('.ent-edit-zone').forEach(z => z.style.display = 'none');
-        if(isOpen){
-          companyPlanningEditingAdId = null;
-          return;
-        }
-        companyPlanningEditingAdId = occId;
+    zone.querySelector('.ent-edit-occ-save-btn').addEventListener('click', () => {
+      // Sécurité : on revérifie l'heure exacte de diffusion au moment d'enregistrer,
+      // pas seulement à l'ouverture du formulaire (cas où l'entreprise a laissé le
+      // formulaire ouvert pendant que le délai s'écoulait).
+      const occTs = parseInt(btn.dataset.occTs, 10);
+      if(!isNaN(occTs) && (occTs - Date.now()) <= 5 * 60 * 1000){
+        zone.querySelector('.ent-edit-result').innerHTML = '<p style="color:var(--red); font-size:12.5px; margin-top:6px;">Trop tard : cette annonce est maintenant verrouillée (moins de 5 minutes avant sa diffusion, ou déjà diffusée).</p>';
+        companyPlanningEditingAdId = null;
+        setTimeout(() => renderCompanyPlanning(), 900);
+        return;
+      }
+      // On retronque toujours à 150 caractères exactement au moment d'enregistrer.
+      const newText = Array.from(ta.value.trim()).slice(0, 150).join('');
+      if(!newText){
+        zone.querySelector('.ent-edit-result').innerHTML = '<p style="color:var(--red); font-size:12.5px; margin-top:6px;">Le texte ne peut pas être vide.</p>';
+        return;
+      }
+      const freshList = loadRequests();
+      const freshAd = freshList.find(r => r.id === adId);
+      if(!freshAd) return;
+      // Sauvegarde propre à CETTE occurrence uniquement : les autres annonces
+      // de la même demande (et leur propre modification éventuelle) ne bougent pas.
+      if(!freshAd.occTextOverrides) freshAd.occTextOverrides = {};
+      freshAd.occTextOverrides[occId] = newText;
+      saveRequests(freshList);
+      const by = session ? session.name : 'Entreprise';
+      logCompanyHistory(freshAd.company, 'ad_edited', `Texte d'une annonce individuelle modifié par l'entreprise`, { by });
+      addLog(`<b>${escapeHtml(freshAd.company)}</b> a modifié le texte d'une annonce individuelle (les autres annonces liées ne sont pas affectées).`);
+      zone.querySelector('.ent-edit-result').innerHTML = '<p style="color:var(--gold); font-size:12.5px; margin-top:6px;">✓ Modification enregistrée pour cette annonce uniquement.</p>';
+      companyPlanningEditingAdId = null;
+      setTimeout(() => renderCompanyPlanning(), 900);
+      showSavedIndicator();
+    });
+  }
 
-        const list = loadRequests();
-        const ad = list.find(r => r.id === adId);
-        if(!ad) return;
-        const currentText = (ad.occTextOverrides && ad.occTextOverrides[occId] !== undefined)
-          ? ad.occTextOverrides[occId]
-          : (ad.texts && ad.texts.length > 1 ? ad.texts[0] : ad.text);
-
-        zone.style.display = 'block';
-        zone.innerHTML = `
-          <div class="field" style="margin-bottom:10px;">
-            <label>Texte de cette annonce uniquement (150 caractères max)</label>
-            <textarea class="ent-edit-occ-text-input" maxlength="150">${escapeHtml(currentText)}</textarea>
-            <div class="counter-row">${Array.from(currentText).length} / 150</div>
-          </div>
-          <button type="button" class="ad-submit ent-edit-occ-save-btn">Enregistrer (cette annonce uniquement)</button>
-          <div class="ent-edit-result"></div>
-        `;
-
-        const ta = zone.querySelector('.ent-edit-occ-text-input');
-        ta.addEventListener('input', () => {
-          let arr = Array.from(ta.value);
-          if(arr.length > 150){ arr = arr.slice(0, 150); ta.value = arr.join(''); }
-          ta.nextElementSibling.textContent = arr.length + ' / 150';
-        });
-
-        zone.querySelector('.ent-edit-occ-save-btn').addEventListener('click', () => {
-          // Sécurité : on revérifie l'heure exacte de diffusion au moment d'enregistrer,
-          // pas seulement à l'ouverture du formulaire (cas où l'entreprise a laissé le
-          // formulaire ouvert pendant que le délai s'écoulait).
-          const occTs = parseInt(btn.dataset.occTs, 10);
-          if(!isNaN(occTs) && (occTs - Date.now()) <= 5 * 60 * 1000){
-            zone.querySelector('.ent-edit-result').innerHTML = '<p style="color:var(--red); font-size:12.5px; margin-top:6px;">Trop tard : cette annonce est maintenant verrouillée (moins de 5 minutes avant sa diffusion, ou déjà diffusée).</p>';
-            companyPlanningEditingAdId = null;
-            setTimeout(() => renderCompanyPlanning(), 900);
-            return;
-          }
-          // On retronque toujours à 150 caractères exactement au moment d'enregistrer.
-          const newText = Array.from(ta.value.trim()).slice(0, 150).join('');
-          if(!newText){
-            zone.querySelector('.ent-edit-result').innerHTML = '<p style="color:var(--red); font-size:12.5px; margin-top:6px;">Le texte ne peut pas être vide.</p>';
-            return;
-          }
-          const freshList = loadRequests();
-          const freshAd = freshList.find(r => r.id === adId);
-          if(!freshAd) return;
-          // Sauvegarde propre à CETTE occurrence uniquement : les autres annonces
-          // de la même demande (et leur propre modification éventuelle) ne bougent pas.
-          if(!freshAd.occTextOverrides) freshAd.occTextOverrides = {};
-          freshAd.occTextOverrides[occId] = newText;
-          saveRequests(freshList);
-          const by = session ? session.name : 'Entreprise';
-          logCompanyHistory(freshAd.company, 'ad_edited', `Texte d'une annonce individuelle modifié par l'entreprise`, { by });
-          addLog(`<b>${escapeHtml(freshAd.company)}</b> a modifié le texte d'une annonce individuelle (les autres annonces liées ne sont pas affectées).`);
-          zone.querySelector('.ent-edit-result').innerHTML = '<p style="color:var(--gold); font-size:12.5px; margin-top:6px;">✓ Modification enregistrée pour cette annonce uniquement.</p>';
-          companyPlanningEditingAdId = null;
-          setTimeout(() => renderCompanyPlanning(), 900);
-          showSavedIndicator();
-        });
-      });
+  // Modification/suppression annonce par annonce, posées UNE SEULE FOIS sur le
+  // conteneur (délégation) : fonctionne de façon fiable quel que soit le nombre
+  // d'annonces affichées ou de rafraîchissements automatiques du planning.
+  function setupCompanyPlanningDelegation(container){
+    if(!container || container.dataset.companyPlanningDelegationReady) return;
+    container.dataset.companyPlanningDelegationReady = '1';
+    container.addEventListener('click', (e) => {
+      const deleteBtn = e.target.closest('.ent-delete-occ-btn');
+      if(deleteBtn){ deleteMissedOccurrence(deleteBtn.dataset.adId, deleteBtn.dataset.occId); return; }
+      const editBtn = e.target.closest('.ent-edit-occ-btn');
+      if(editBtn){ toggleCompanyOccEditZone(container, editBtn); return; }
     });
   }
 
@@ -5459,8 +5483,11 @@
       </div>
     `).join('');
 
-    container.querySelectorAll('button[data-action]').forEach(btn => {
-      btn.addEventListener('click', () => {
+    if(!container.dataset.specialReqDelegationReady){
+      container.dataset.specialReqDelegationReady = '1';
+      container.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if(!btn) return;
         const list = loadServiceRequests();
         const idx = list.findIndex(r => r.id === btn.dataset.id);
         if(idx === -1) return;
@@ -5475,7 +5502,7 @@
         renderSpecialActive();
         renderBroadcastPlanning();
       });
-    });
+    }
   }
 
   function renderSpecialActive(){
@@ -5505,8 +5532,11 @@
       </div>
     `).join('');
 
-    container.querySelectorAll('button[data-action]').forEach(btn => {
-      btn.addEventListener('click', () => {
+    if(!container.dataset.specialActiveDelegationReady){
+      container.dataset.specialActiveDelegationReady = '1';
+      container.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if(!btn) return;
         const id = btn.dataset.id;
         const action = btn.dataset.action;
         const list = loadServiceRequests();
@@ -5522,7 +5552,7 @@
         renderSpecialActive();
         renderBroadcastPlanning();
       });
-    });
+    }
   }
 
   function renderActiveAds(){
@@ -5553,8 +5583,11 @@
       </div>
     `).join('');
 
-    container.querySelectorAll('button[data-action]').forEach(btn => {
-      btn.addEventListener('click', () => {
+    if(!container.dataset.activeAdsDelegationReady){
+      container.dataset.activeAdsDelegationReady = '1';
+      container.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if(!btn) return;
         const id = btn.dataset.id;
         const action = btn.dataset.action;
         const list = loadRequests();
@@ -5572,7 +5605,7 @@
         renderCompanySummary();
         renderDirectionRequests();
       });
-    });
+    }
   }
 
   const LS_COMPLETED_KEY = 'echonews_completed_ads';
@@ -6059,9 +6092,11 @@
     return `<span class="blur-cred">Identifiant : <b>${escapeHtml(user)}</b> — Mot de passe : <b>${escapeHtml(pass)}</b></span>`;
   }
   function wireBlur(container){
-    if(!container) return;
-    container.querySelectorAll('.blur-cred').forEach(el => {
-      el.addEventListener('click', () => el.classList.toggle('revealed'));
+    if(!container || container.dataset.blurCredDelegationReady) return;
+    container.dataset.blurCredDelegationReady = '1';
+    container.addEventListener('click', (e) => {
+      const el = e.target.closest('.blur-cred');
+      if(el) el.classList.toggle('revealed');
     });
   }
 
@@ -6084,8 +6119,11 @@
     `).join('');
     wireBlur(container);
 
-    container.querySelectorAll('button[data-action="change-pass"]').forEach(btn => {
-      btn.addEventListener('click', () => {
+    if(!container.dataset.changePassDelegationReady){
+      container.dataset.changePassDelegationReady = '1';
+      container.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action="change-pass"]');
+        if(!btn) return;
         const zone = container.querySelector(`.change-pass-zone[data-zone="${btn.dataset.user.replace(/"/g,'')}"]`);
         if(!zone) return;
         const wasOpen = zone.style.display !== 'none';
@@ -6127,7 +6165,7 @@
           showSavedIndicator();
         });
       });
-    });
+    }
   }
 
   function renderIdEmployeeList(){
@@ -6147,14 +6185,17 @@
     `).join('');
     wireBlur(container);
 
-    container.querySelectorAll('button[data-action="delete-account"]').forEach(btn => {
-      btn.addEventListener('click', () => {
+    if(!container.dataset.deleteAccountDelegationReady){
+      container.dataset.deleteAccountDelegationReady = '1';
+      container.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action="delete-account"]');
+        if(!btn) return;
         const user = btn.dataset.user;
         saveEmployeeAccounts(loadEmployeeAccounts().filter(a => a.user !== user));
         renderIdEmployeeList();
         renderGradesManagement();
       });
-    });
+    }
   }
 
   function renderIdCompanySelected(){
@@ -6292,14 +6333,17 @@
         <button data-action="reset-price" data-company="${escapeHtml(name)}">Réinitialiser à $4 000</button>
       </div>
     `).join('');
-    container.querySelectorAll('button[data-action="reset-price"]').forEach(btn => {
-      btn.addEventListener('click', () => {
+    if(!container.dataset.resetPriceDelegationReady){
+      container.dataset.resetPriceDelegationReady = '1';
+      container.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action="reset-price"]');
+        if(!btn) return;
         const prices = loadCompanyPrices();
         delete prices[btn.dataset.company];
         saveCompanyPrices(prices);
         renderPricingPicker();
       });
-    });
+    }
   }
 
   /* ---------- Créditer une entreprise manuellement ---------- */
@@ -6403,8 +6447,11 @@
         <button data-action="cancel-manual-invoice" data-id="${escapeHtml(p.id)}">Annuler</button>
       </div>
     `).join('');
-    container.querySelectorAll('button[data-action="cancel-manual-invoice"]').forEach(btn => {
-      btn.addEventListener('click', () => {
+    if(!container.dataset.cancelInvoiceDelegationReady){
+      container.dataset.cancelInvoiceDelegationReady = '1';
+      container.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action="cancel-manual-invoice"]');
+        if(!btn) return;
         const payments = loadPayments();
         const idx = payments.findIndex(p => p.id === btn.dataset.id);
         if(idx === -1) return;
@@ -6419,7 +6466,7 @@
         if(typeof renderOverviewStats === 'function') renderOverviewStats();
         showSavedIndicator();
       });
-    });
+    }
   }
 
   const manualInvoiceBtn = document.getElementById('manualInvoiceBtn');
@@ -6554,8 +6601,11 @@
       </table>
     `;
 
-    container.querySelectorAll('input[type="checkbox"][data-perm]').forEach(cb => {
-      cb.addEventListener('change', () => {
+    if(!container.dataset.permCheckboxDelegationReady){
+      container.dataset.permCheckboxDelegationReady = '1';
+      container.addEventListener('change', (e) => {
+        const cb = e.target.closest('input[type="checkbox"][data-perm]');
+        if(!cb) return;
         const all = loadGradePermissions();
         const gradeId = cb.dataset.grade;
         if(!all[gradeId]) all[gradeId] = {};
@@ -6563,7 +6613,7 @@
         saveGradePermissions(all);
         showSavedIndicator();
       });
-    });
+    }
   }
 
   /* ---------- Banderole d'information défilante ---------- */
@@ -7179,8 +7229,11 @@
       input.addEventListener('blur', commit);
     });
 
-    gradesContainer.querySelectorAll('button[data-action="delete-grade"]').forEach(btn => {
-      btn.addEventListener('click', () => {
+    if(!gradesContainer.dataset.deleteGradeDelegationReady){
+      gradesContainer.dataset.deleteGradeDelegationReady = '1';
+      gradesContainer.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action="delete-grade"]');
+        if(!btn) return;
         const id = btn.dataset.id;
         if(id === DIRECTION_GRADE_ID){
           try{ localStorage.setItem(LS_DIRECTION_GRADE_REMOVED_KEY, '1'); }catch(e){}
@@ -7194,7 +7247,7 @@
         renderSalary();
         showSavedIndicator();
       });
-    });
+    }
 
     empContainer.innerHTML = loadEmployeeAccounts().map(acc => {
       const current = mapping[acc.display] || '';
@@ -7208,8 +7261,11 @@
       `;
     }).join('');
 
-    empContainer.querySelectorAll('select[data-emp]').forEach(sel => {
-      sel.addEventListener('change', () => {
+    if(!empContainer.dataset.empGradeSelectDelegationReady){
+      empContainer.dataset.empGradeSelectDelegationReady = '1';
+      empContainer.addEventListener('change', (e) => {
+        const sel = e.target.closest('select[data-emp]');
+        if(!sel) return;
         const map = loadEmployeeGrades();
         if(sel.value){ map[sel.dataset.emp] = sel.value; }
         else{ delete map[sel.dataset.emp]; }
@@ -7217,7 +7273,7 @@
         renderSalary();
         showSavedIndicator();
       });
-    });
+    }
   }
 
   const gradeNameInput = document.getElementById('gradeName');
@@ -7838,13 +7894,16 @@
       `;
     }).join('');
 
-    container.querySelectorAll('button[data-action="delete-company-history"]').forEach(btn => {
-      btn.addEventListener('click', () => {
+    if(!container.dataset.deleteCompanyHistDelegationReady){
+      container.dataset.deleteCompanyHistDelegationReady = '1';
+      container.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action="delete-company-history"]');
+        if(!btn) return;
         saveCompanyHistory(loadCompanyHistory().filter(h => h.id !== btn.dataset.id));
         renderCompanyHistoryList();
         showSavedIndicator();
       });
-    });
+    }
   }
 
   function renderTaxHistory(){
@@ -8006,13 +8065,16 @@
       });
     }
 
-    container.querySelectorAll('button[data-action="delete-expense"]').forEach(btn => {
-      btn.addEventListener('click', () => {
+    if(!container.dataset.deleteExpenseDelegationReady){
+      container.dataset.deleteExpenseDelegationReady = '1';
+      container.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action="delete-expense"]');
+        if(!btn) return;
         deleteExpense(btn.dataset.id);
         renderTax();
         renderOverviewStats();
       });
-    });
+    }
   }
 
   function renderOverviewStats(){
