@@ -8146,7 +8146,7 @@
     'echonews_company_payments', 'echonews_reviews', 'echonews_salary_ledger', 'echonews_tombstones',
     'echonews_chats', 'echonews_ticker_messages',
     'echonews_wheel_config', 'echonews_wheel_config_published', 'echonews_wheel_spins',
-    'echonews_event_audit_log'
+    'echonews_event_audit_log', 'echonews_map_timestamps'
   ];
 
   let cloudDb = null;
@@ -8214,6 +8214,29 @@
         if(changed) _origSetItem('echonews_tombstones', JSON.stringify(tombstones));
       })();
 
+      // Horodatage par sous-clé pour les "cartes" (soldes, statuts, prix, permissions...).
+      // Sans ça, ces cartes fusionnaient en donnant TOUJOURS raison à la copie locale
+      // en cas de conflit — exactement le même bug que pour les listes, mais ici sur
+      // le solde des entreprises (une entreprise pouvait voir un solde à 0 alors que
+      // la Direction l'avait bien crédité, si son navigateur avait une vieille copie
+      // locale du solde). Ce magasin d'horodatages, lui-même synchronisé, permet de
+      // savoir laquelle des deux versions d'une sous-clé donnée est réellement la
+      // plus récente, peu importe l'appareil.
+      function loadMapTimestamps(){
+        try{
+          const raw = _origGetItem('echonews_map_timestamps');
+          return raw ? JSON.parse(raw) : {};
+        }catch(e){ return {}; }
+      }
+      function bumpMapTimestamps(cloudKey, changedEntries){
+        const subKeys = Object.keys(changedEntries);
+        if(!subKeys.length) return;
+        const ts = loadMapTimestamps();
+        const now = Date.now();
+        subKeys.forEach(sk => { ts[cloudKey + '::' + sk] = { ts: now, value: changedEntries[sk] }; });
+        _origSetItem('echonews_map_timestamps', JSON.stringify(ts));
+      }
+
       function detectKeyField(localVal, remoteVal){
         const sample = (Array.isArray(localVal) && localVal[0]) || (Array.isArray(remoteVal) && remoteVal[0]);
         if(!sample || typeof sample !== 'object') return null;
@@ -8265,7 +8288,15 @@
               // Carte simple (ex: diffusions cochées par occurrence, statut de
               // service) : une clé présente avant et absente maintenant = supprimée.
               const removedKeys = Object.keys(oldVal).filter(k2 => !(k2 in newVal));
-              if(removedKeys.length) recordTombstones(key, removedKeys);
+              if(removedKeys.length && key !== 'echonews_map_timestamps') recordTombstones(key, removedKeys);
+              // Et on horodate (avec la valeur) chaque sous-clé réellement modifiée.
+              if(key !== 'echonews_map_timestamps'){
+                const changedEntries = {};
+                Object.keys(newVal).forEach(k2 => {
+                  if(JSON.stringify(oldVal[k2]) !== JSON.stringify(newVal[k2])) changedEntries[k2] = newVal[k2];
+                });
+                bumpMapTimestamps(key, changedEntries);
+              }
             }
           }catch(e){}
         }
@@ -8322,11 +8353,44 @@
           return localVal;
         }
         if(localVal && remoteVal && typeof localVal === 'object' && typeof remoteVal === 'object' && !Array.isArray(localVal) && !Array.isArray(remoteVal)){
+          if(cloudKey === 'echonews_map_timestamps'){
+            // Magasin d'horodatages lui-même : jamais de vrai conflit, on garde pour
+            // chaque sous-clé l'entrée ayant l'horodatage le plus grand (le plus récent).
+            const merged = Object.assign({}, remoteVal);
+            Object.keys(localVal).forEach(k2 => {
+              const remoteEntry = merged[k2];
+              const localEntry = localVal[k2];
+              const remoteTs = (remoteEntry && typeof remoteEntry.ts === 'number') ? remoteEntry.ts : 0;
+              const localTs = (localEntry && typeof localEntry.ts === 'number') ? localEntry.ts : 0;
+              if(!remoteEntry || localTs > remoteTs) merged[k2] = localEntry;
+            });
+            return merged;
+          }
           // Fusion clé par clé (ex: soldes, statuts de service) : les deux côtés
-          // gardent ce qu'ils ont ajouté, le local gagne seulement sur les clés
-          // modifiées des deux côtés — et toute clé supprimée (tombstone) reste
-          // définitivement absente, même si l'autre côté la contient encore.
-          const merged = Object.assign({}, remoteVal, localVal);
+          // gardent ce qu'ils ont ajouté. Pour une sous-clé où local et remote sont
+          // en désaccord, on consulte le magasin d'horodatages (bumpMapTimestamps) :
+          // la valeur qui y est enregistrée est celle du dernier appareil à l'avoir
+          // réellement modifiée — jamais automatiquement la copie locale, sinon un
+          // appareil resté bloqué avec un vieux solde pouvait le voir revenir
+          // indéfiniment, même après un rafraîchissement complet de la page. Sans
+          // historique connu pour cette sous-clé (données anciennes), on privilégie
+          // le serveur par défaut, pas la copie locale.
+          const mapTimestamps = loadMapTimestamps();
+          const merged = Object.assign({}, remoteVal);
+          const allKeys = new Set([...Object.keys(remoteVal), ...Object.keys(localVal)]);
+          allKeys.forEach(k2 => {
+            if(JSON.stringify(remoteVal[k2]) === JSON.stringify(localVal[k2])){
+              if(!(k2 in merged)) merged[k2] = localVal[k2];
+              return;
+            }
+            const known = mapTimestamps[cloudKey + '::' + k2];
+            if(known && 'value' in known){
+              merged[k2] = known.value;
+            }else if(!(k2 in remoteVal)){
+              merged[k2] = localVal[k2];
+            }
+            // sinon : remote déjà en place dans "merged", on le garde par défaut.
+          });
           Object.keys(merged).forEach(k2 => {
             if(isTombstoned(tombstones, cloudKey, k2)) delete merged[k2];
           });
