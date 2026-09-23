@@ -6,30 +6,101 @@
 <title>SKY9 // Régie publicitaire</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700;800&family=Sora:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg: #eef3f9;
+    --bg: #eef2f8;
     --bg-raised: #ffffff;
     --bg-card: #ffffff;
-    --line: #c7d8ea;
-    --line-soft: #dbe7f3;
-    --gold: #1f5fa8;
+    --line: #c5d6e8;
+    --line-soft: #dce6f2;
+    --gold: #1857a4;
     --gold-dim: #4a7fb5;
-    --emerald: #2f9e6b;
-    --amber: #c98a3a;
-    --red: #c0392b;
+    --emerald: #16a874;
+    --amber: #e08a1e;
+    --red: #dc3f4a;
     --discord: #5865F2;
     --discord-hover: #6a74f5;
-    --text: #16263a;
+    --text: #101a2b;
     --text-dim: #4d6376;
     --text-faint: #7c93a8;
+    --accent-grad: linear-gradient(120deg, #1857a4 0%, #2d6fc4 55%, #e08a1e 130%);
+    --radius: 10px;
     padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   *{box-sizing:border-box;}
   html{scroll-padding-top: env(safe-area-inset-top, 0px);}
   html,body{height:100%;}
+
+  /* ================================================================
+     INTERACTIVITÉ / ANIMATIONS — couche appliquée à toute l'app,
+     sans changer la structure ni le comportement fonctionnel.
+     ================================================================ */
+  button, .subtab, .dir-cat, .corr-type-btn, .freq-chip, .day-chip, .file-upload-btn{
+    transition: transform .12s ease, box-shadow .12s ease, background .15s ease, color .15s ease, border-color .15s ease, filter .15s ease;
+  }
+  button:active:not(:disabled){ transform: scale(0.95); }
+  .ad-submit, .btn-accept{
+    position: relative; overflow: hidden;
+  }
+  .ad-submit:hover:not(:disabled), .btn-accept:hover{
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,.32);
+    filter: brightness(1.06);
+  }
+  .ad-submit:active:not(:disabled), .btn-accept:active{
+    transform: translateY(0) scale(0.97);
+  }
+  .btn-ripple{
+    position:absolute; width:12px; height:12px; margin:-6px;
+    border-radius:50%; background: rgba(255,255,255,.55);
+    transform: scale(0); animation: rippleAnim .6s ease-out forwards; pointer-events:none;
+  }
+  @keyframes rippleAnim{ to{ transform: scale(20); opacity: 0; } }
+
+  .active-ad-card, .account-row, .kpi, .request-card, .history-item, .chat-bubble{
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+  .active-ad-card:hover, .account-row:hover, .kpi:hover, .request-card:hover{
+    transform: translateY(-3px);
+    box-shadow: 0 12px 26px rgba(0,0,0,.3);
+  }
+
+  @keyframes panelFadeIn{
+    from{ opacity: 0; transform: translateY(10px); }
+    to{ opacity: 1; transform: translateY(0); }
+  }
+  .panel.active, .subpanel.active{ animation: panelFadeIn .35s ease; }
+
+  input[type="checkbox"]{ transition: transform .15s ease; }
+  input[type="checkbox"]:checked{ animation: checkPop .3s ease; }
+  @keyframes checkPop{
+    0%{ transform: scale(1); } 45%{ transform: scale(1.4); } 100%{ transform: scale(1); }
+  }
+
+  #globalToast.show{ animation: toastBounce .45s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes toastBounce{
+    0%{ transform: translateX(-50%) translateY(30px) scale(.9); opacity:0; }
+    60%{ transform: translateX(-50%) translateY(-4px) scale(1.02); opacity:1; }
+    100%{ transform: translateX(-50%) translateY(0) scale(1); }
+  }
+
+  .confetti-piece{
+    position: fixed; top: -20px; width: 8px; height: 14px; z-index: 9998;
+    animation-name: confettiFall; animation-timing-function: linear; animation-fill-mode: forwards;
+    pointer-events:none; border-radius:2px;
+  }
+  @keyframes confettiFall{
+    to{ transform: translateY(105vh) rotate(720deg); opacity: 0.25; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    button, .active-ad-card, .account-row, .kpi, .request-card, .panel, .subpanel, input[type="checkbox"]{
+      animation: none !important; transition: none !important;
+    }
+  }
+
   body{
     margin:0;
     background: var(--bg);
@@ -141,6 +212,14 @@
     padding: 24px;
     padding-top: calc(24px + env(safe-area-inset-top, 0px));
     padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    position: relative;
+    overflow: hidden;
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='210' height='130'%3E%3Ctext x='-10' y='90' font-family='Oswald, sans-serif' font-weight='800' font-size='44' letter-spacing='2' fill='rgba(255,255,255,0.09)' transform='rotate(-10 105 65)'%3ESKY9%3C/text%3E%3C/svg%3E"),
+      linear-gradient(135deg, #0b1c30 0%, #123a5e 42%, #17417a 68%, #c07f2e 135%);
+    background-repeat: repeat, no-repeat;
+    background-size: 210px 130px, cover;
+    background-position: 0 0, center;
   }
   .login-box{
     width: 100%;
@@ -148,6 +227,9 @@
     background: var(--bg-card);
     border: 1px solid var(--line);
     padding: 32px;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 24px 60px rgba(5,20,40,0.4);
   }
   .login-brand{
     display:flex; align-items:center; gap:12px; margin-bottom: 28px;
@@ -215,7 +297,7 @@
     align-items:center;
     gap: 20px;
     padding: 14px 24px;
-    background: var(--bg-raised);
+    background: linear-gradient(120deg, #ffffff 0%, #f3f8fd 55%, #eaf1fa 100%);
     border-bottom: 1px solid var(--line);
   }
   .brand{
@@ -262,14 +344,17 @@
   nav.tabs button{
     appearance:none; border:none; background:transparent;
     color: var(--text-dim);
-    font-family:'IBM Plex Sans', sans-serif;
-    font-weight:500; font-size: 14.5px;
-    padding: 9px 16px; cursor:pointer; border-radius: 3px;
+    font-family:'Sora', sans-serif;
+    font-weight:600; font-size: 14px;
+    padding: 10px 18px; cursor:pointer; border-radius: 999px;
     border: 1px solid transparent;
-    transition: color .15s ease, background .15s ease;
+    transition: color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease;
   }
-  nav.tabs button:hover{ color: var(--text); }
-  nav.tabs button.active{ color: var(--bg); background: var(--gold); font-weight:600; }
+  nav.tabs button:hover{ color: var(--gold); background: rgba(24,87,164,0.08); transform: translateY(-1px); }
+  nav.tabs button.active{
+    color:#fff; background: var(--accent-grad); font-weight:700;
+    box-shadow: 0 6px 16px rgba(24,87,164,0.35);
+  }
   nav.tabs button:focus-visible{ outline: 2px solid var(--gold); outline-offset:2px; }
   nav.tabs button.hidden-tab{ display:none; }
   .subtabs .subtab.hidden-tab{ display:none; }
@@ -364,16 +449,17 @@
   .field textarea, .field input, .field select{
     width:100%;
     background: var(--bg-raised);
-    border: 1px solid var(--line);
+    border: 1.5px solid var(--line);
     color: var(--text);
     font-family:'IBM Plex Sans', sans-serif;
     font-size: 14px;
     padding: 10px 12px;
-    border-radius: 2px;
+    border-radius: 6px;
+    transition: border-color .15s ease, box-shadow .15s ease;
   }
   .field textarea{ resize: vertical; min-height: 80px; line-height:1.4; }
   .field textarea:focus, .field input:focus, .field select:focus{
-    outline: none; border-color: var(--gold);
+    outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(24,87,164,0.15);
   }
   .counter-row{
     display:flex; justify-content:flex-end; margin-top:6px;
@@ -421,18 +507,20 @@
 
   .ad-submit{
     align-self:flex-start;
-    background: var(--gold);
-    color: var(--bg);
+    background: var(--accent-grad);
+    background-size: 160% 160%;
+    color: #fff;
     border:none;
-    font-family:'IBM Plex Sans', sans-serif;
-    font-weight:600;
+    font-family:'Sora', sans-serif;
+    font-weight:700;
     font-size: 14px;
-    padding: 11px 22px;
+    padding: 12px 24px;
     cursor:pointer;
-    border-radius: 2px;
-    transition: background .15s ease;
+    border-radius: 7px;
+    box-shadow: 0 6px 16px rgba(24,87,164,0.3);
+    transition: background-position .4s ease, box-shadow .18s ease, transform .18s ease;
   }
-  .ad-submit:hover{ background: #2f74c0; }
+  .ad-submit:hover{ background-position: 100% 100%; box-shadow: 0 10px 22px rgba(24,87,164,0.4); }
   .ad-reset{
     align-self:flex-start;
     background: transparent;
@@ -481,7 +569,6 @@
   .recap-note{ margin-top:16px; font-size:11.5px; color: var(--text-faint); line-height:1.5; }
 
   .history-block{ margin-top: 28px; }
-  .history-block h2{ font-family:'Oswald', sans-serif; font-size: 17px; font-weight:600; margin: 0 0 14px; }
   .history-empty{ font-size: 13px; color: var(--text-faint); font-style:italic; }
   .paste-zone{
     margin-top: 10px;
@@ -545,6 +632,147 @@
   .chat-image-preview-name{ font-family:'IBM Plex Mono', monospace; font-size:11px; color: var(--text-dim); }
   @media (max-width:600px){ .chat-bubble{ max-width:90%; } }
 
+  #globalToast{
+    position: fixed; left:50%; bottom: 28px; transform: translateX(-50%) translateY(20px);
+    background: var(--bg-card); border: 1px solid var(--gold); color: var(--text);
+    font-family:'IBM Plex Sans', sans-serif; font-size: 13.5px;
+    padding: 12px 20px; border-radius: 4px; box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+    max-width: 90vw; text-align:center; z-index: 9999;
+    opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease;
+  }
+  #globalToast.show{ opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ---------- Banderole d'information défilante ---------- */
+  .ticker-banner{
+    width:100%; overflow:hidden; background: var(--bg-raised);
+    border-bottom: 1px solid var(--gold); padding: 7px 0;
+  }
+  .ticker-track{
+    display:inline-flex; white-space:nowrap; width:max-content;
+    animation: ticker-scroll linear infinite;
+    font-family:'IBM Plex Mono', monospace; font-size: 12.5px; color: var(--gold);
+    letter-spacing: 0.2px;
+  }
+  .ticker-track .ticker-item{ padding-right: 60px; }
+  @keyframes ticker-scroll{
+    from{ transform: translateX(0); }
+    to{ transform: translateX(-50%); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .ticker-track{ animation: none; }
+  }
+
+  /* ---------- Roue de la Fortune ---------- */
+  .wheel-wrap{ position:relative; width:320px; max-width:100%; margin:0 auto 18px; }
+  @media (max-width: 420px){
+    .wheel-slice-label span{ font-size:10.5px; max-width:64px; margin-left:10px; }
+  }
+  .wheel-disc{
+    width:100%; aspect-ratio:1/1; border-radius:50%; position:relative;
+    border: 6px solid var(--gold); box-shadow: 0 0 0 2px var(--bg-card), 0 10px 30px rgba(0,0,0,0.4);
+    transition: transform cubic-bezier(0.15, 0.65, 0.25, 1);
+  }
+  .wheel-slice-label{
+    position:absolute; top:50%; left:50%; width:50%; height:0;
+    transform-origin: 0% 0%;
+    display:flex; align-items:center; pointer-events:none;
+  }
+  .wheel-slice-label span{
+    display:inline-block; margin-left:16px;
+    font-family:'Oswald', sans-serif; font-weight:700; font-size:12px; color:#fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,.7);
+    max-width:88px; white-space:normal; line-height:1.15;
+  }
+  .wheel-pointer{
+    position:absolute; top:-14px; left:50%; transform:translateX(-50%);
+    font-size:28px; color: var(--gold); z-index:2; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));
+    animation: pointerBounce 1.6s ease-in-out infinite;
+  }
+  @keyframes pointerBounce{
+    0%, 100%{ transform: translateX(-50%) translateY(0); }
+    50%{ transform: translateX(-50%) translateY(4px); }
+  }
+  .wheel-legend{ display:flex; flex-wrap:wrap; gap:10px 18px; justify-content:center; margin-bottom:14px; }
+  .wheel-legend-item{ display:flex; align-items:center; gap:6px; font-size:12.5px; color: var(--text-dim); }
+  .wheel-legend-swatch{ width:12px; height:12px; border-radius:3px; flex-shrink:0; }
+  .wheel-segment-row{
+    display:grid; grid-template-columns: auto 1fr 90px 1fr 90px auto auto auto;
+    gap:8px; align-items:center; padding:8px; border:1px solid var(--line); border-radius:2px; margin-bottom:8px;
+    background: var(--bg-raised);
+  }
+  .wheel-segment-row input[type="color"]{ width:36px; height:32px; padding:0; border:1px solid var(--line); cursor:pointer; }
+  .wheel-segment-row input[type="text"], .wheel-segment-row input[type="number"]{
+    background: var(--bg-card); border:1px solid var(--line); color: var(--text);
+    font-family:'IBM Plex Sans', sans-serif; font-size:12.5px; padding:6px 8px; border-radius:2px; width:100%;
+  }
+  .wheel-segment-row button{
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px; background:transparent;
+    border:1px solid var(--line); color: var(--text-dim); padding:6px 8px; cursor:pointer; border-radius:2px;
+  }
+  .wheel-segment-row button:hover{ border-color: var(--gold); color: var(--gold); }
+  @media (max-width: 900px){ .wheel-segment-row{ grid-template-columns: 1fr 1fr; } }
+
+  .lot-row{
+    display:grid; grid-template-columns: auto 2fr 1fr auto; gap:8px; align-items:center;
+    padding:8px; border:1px solid var(--line); border-radius:2px; margin-bottom:8px; background: var(--bg-raised);
+  }
+  .lot-row input{
+    background: var(--bg-card); border:1px solid var(--line); color: var(--text);
+    font-family:'IBM Plex Sans', sans-serif; font-size:12.5px; padding:6px 8px; border-radius:2px; width:100%;
+  }
+
+  .tabs button.ev-admin-only.hidden-tab, .subtabs .subtab.ev-admin-only.hidden-tab{ display:none; }
+
+  /* ---------- Tutoriel guidé interactif (vrais éléments de l'app) ---------- */
+  .guided-tour-target{
+    position: relative !important;
+    z-index: 9995 !important;
+    box-shadow: 0 0 0 5px rgba(26,77,143,0.55), 0 0 0 9999px rgba(8,16,28,0.6) !important;
+    border-radius: 8px;
+    transition: box-shadow .25s ease;
+  }
+  .guided-tour-bubble{
+    position: fixed; z-index: 9996; width: 300px; max-width: calc(100vw - 24px);
+    background: var(--bg-card); border: 1px solid var(--gold); border-radius: 8px;
+    box-shadow: 0 16px 40px rgba(0,0,0,.4); padding: 16px 18px;
+    font-family:'IBM Plex Sans', sans-serif;
+  }
+  .guided-tour-bubble.docked-bottom{
+    left: 12px; right: 12px; width:auto; max-width:none;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px)); top:auto !important;
+  }
+  .guided-tour-progress{ height:5px; background: var(--line); border-radius:3px; overflow:hidden; margin-bottom:8px; }
+  .guided-tour-progress-bar{ height:100%; background: var(--gold); transition: width .3s ease; }
+  .guided-tour-step-label{ font-family:'IBM Plex Mono', monospace; font-size:11px; color: var(--text-faint); margin-bottom:10px; }
+  .guided-tour-robot{ font-size:26px; margin-bottom:6px; line-height:1; }
+  .guided-tour-text{ font-size:13.5px; color: var(--text); line-height:1.55; margin-bottom:14px; }
+  .guided-tour-actions{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .guided-tour-actions button{
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px; padding:7px 10px; border-radius:4px;
+    border:1px solid var(--line); background: var(--bg-raised); color: var(--text-dim); cursor:pointer;
+  }
+  .guided-tour-actions button:hover{ border-color: var(--gold); color: var(--gold); }
+  .guided-tour-actions button#guidedTourCloseBtn{ margin-left:auto; }
+  .guided-tour-actions button#guidedTourNextBtn{ background: var(--gold); border-color: var(--gold); color:#fff; }
+  .guided-tour-resume-banner{
+    position: fixed; bottom: 20px; left:50%; transform: translateX(-50%); z-index: 9997;
+    background: var(--bg-card); border: 1px solid var(--gold); border-radius: 8px; padding: 16px 20px;
+    box-shadow: 0 16px 40px rgba(0,0,0,.4); max-width: 340px; text-align:center;
+    font-family:'IBM Plex Sans', sans-serif; font-size:13.5px; color: var(--text);
+  }
+  .guided-tour-resume-banner .guided-tour-actions{ justify-content:center; margin-top:12px; }
+  .tutorial-launch-btn{
+    display:block; width:100%; text-align:left; margin-top:6px;
+    background: var(--bg-raised); border: 1px solid var(--gold); color: var(--gold);
+    font-family:'IBM Plex Sans', sans-serif; font-weight:600; font-size:13.5px;
+    padding:12px 14px; border-radius:4px; cursor:pointer;
+  }
+  .tutorial-launch-btn:hover{ background: var(--gold); color:#fff; }
+  @media (max-width: 640px){
+    .guided-tour-bubble:not(.docked-bottom){ display:none; }
+    .guided-tour-bubble.docked-bottom{ display:block; }
+  }
+
   .image-lightbox{
     display:none; position:fixed; inset:0; z-index:500;
     background: rgba(10,15,20,0.9);
@@ -582,7 +810,6 @@
     padding: 18px 22px; border-bottom: 1px solid var(--line);
     position: sticky; top:0; background: var(--bg-card);
   }
-  .tutorial-header h2{ font-family:'Oswald', sans-serif; font-size: 18px; margin:0; }
   .tutorial-header button{
     background:transparent; border: 1px solid var(--line); color: var(--text-dim);
     width: 30px; height:30px; cursor:pointer; font-size:14px;
@@ -639,9 +866,14 @@
     display:grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
     background: var(--line); border: 1px solid var(--line); margin-bottom: 28px;
   }
-  .kpi{ background: var(--bg-card); padding: 18px 20px; }
+  .kpi{ background: var(--bg-card); padding: 18px 20px; position:relative; overflow:hidden; }
+  .kpi::before{ content:''; position:absolute; top:0; left:0; right:0; height:3px; background: var(--accent-grad); opacity:0; transition: opacity .2s ease; }
+  .kpi:hover::before{ opacity:1; }
   .kpi .label{ font-family:'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--text-faint); text-transform:uppercase; letter-spacing:0.4px; }
-  .kpi .value{ font-family:'Oswald', sans-serif; font-size: 27px; font-weight:600; margin-top: 6px; color: var(--gold); }
+  .kpi .value{
+    font-family:'Sora', sans-serif; font-size: 27px; font-weight:800; margin-top: 6px;
+    background: var(--accent-grad); -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
   .kpi .sub{ font-size:11.5px; color: var(--text-dim); margin-top:4px; }
   @media (max-width: 760px){ .kpi-row{ grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 420px){
@@ -651,7 +883,9 @@
   }
 
   .requests-block{
-    background: var(--bg-card); border: 1px solid var(--line); padding: 20px; margin-bottom: 24px;
+    background: var(--bg-card); border: 1px solid var(--line); border-top: 3px solid var(--gold);
+    border-radius: 0 0 var(--radius) var(--radius);
+    padding: 20px; margin-bottom: 24px;
   }
   .dir-categories{
     display:flex; gap: 8px; margin-bottom: 18px; flex-wrap:wrap;
@@ -672,12 +906,15 @@
   .subtabs .subtab.cat-hidden{ display:none; }
   .subtabs .subtab{
     appearance:none; border:none; background:transparent;
-    color: var(--text-dim); font-family:'IBM Plex Sans', sans-serif; font-weight:500;
+    color: var(--text-dim); font-family:'IBM Plex Sans', sans-serif; font-weight:600;
     font-size: 13.5px; padding: 10px 4px; margin-right: 18px; cursor:pointer;
-    border-bottom: 2px solid transparent; margin-bottom:-1px;
+    border-bottom: 3px solid transparent; margin-bottom:-1px;
+    position: relative; transition: color .18s ease;
   }
-  .subtabs .subtab:hover{ color: var(--text); }
-  .subtabs .subtab.active{ color: var(--gold); border-bottom-color: var(--gold); font-weight:600; }
+  .subtabs .subtab:hover{ color: var(--gold); }
+  .subtabs .subtab.active{
+    color: var(--gold); border-bottom-color: var(--amber); font-weight:700;
+  }
   .subpanel{ display:none; }
   .subpanel.active{ display:block; animation: fadein .2s ease; }
 
@@ -907,7 +1144,18 @@
     font-family:'IBM Plex Mono', monospace; font-size:11px; background:transparent;
     border:1px solid var(--line); color: var(--text-dim); padding: 5px 10px; cursor:pointer;
   }
-  .requests-block h2{ font-family:'Oswald', sans-serif; font-size: 16px; font-weight:600; margin: 0 0 16px; }
+  .requests-block h2, .history-block h2, .dash-block h2, .tutorial-header h2{
+    font-family:'Sora', sans-serif; font-weight:700; letter-spacing: 0.2px;
+    position: relative; padding-left: 14px;
+  }
+  .requests-block h2::before, .history-block h2::before, .dash-block h2::before{
+    content: ''; position:absolute; left:0; top:2px; bottom:2px; width:4px;
+    border-radius:3px; background: var(--accent-grad);
+  }
+  .requests-block h2{ font-size: 16px; margin: 0 0 16px; }
+  .history-block h2{ font-size: 17px; margin: 0 0 14px; }
+  .tutorial-header h2{ font-size: 18px; margin:0; padding-left:0; }
+  .dash-block h2{ font-size: 15px; margin: 0 0 16px; }
   .requests-empty{ font-size: 13px; color: var(--text-faint); font-style:italic; }
   .request-card{
     border: 1px solid var(--line); background: var(--bg-raised);
@@ -924,18 +1172,18 @@
   @media (max-width:700px){ .request-details{ grid-template-columns: repeat(2,1fr); } }
   .request-actions{ display:flex; gap: 10px; }
   .request-actions button{
-    font-family:'IBM Plex Sans', sans-serif; font-weight:600; font-size:12.5px;
-    border:none; padding: 8px 14px; cursor:pointer; border-radius:2px;
+    font-family:'IBM Plex Sans', sans-serif; font-weight:700; font-size:12.5px;
+    border:none; padding: 9px 16px; cursor:pointer; border-radius:6px;
+    transition: transform .15s ease, box-shadow .15s ease;
   }
-  .btn-accept{ background: var(--emerald); color: #0e1712; }
-  .btn-accept:hover{ background:#5aa17d; }
+  .btn-accept{ background: linear-gradient(120deg, #16a874, #0e8a5f); color: #fff; box-shadow: 0 4px 12px rgba(22,168,116,.3); }
+  .btn-accept:hover{ transform: translateY(-2px); box-shadow: 0 8px 18px rgba(22,168,116,.4); }
   .btn-refuse{ background: transparent; border: 1px solid var(--red) !important; color: var(--red); }
-  .btn-refuse:hover{ background: rgba(181,84,74,0.12); }
+  .btn-refuse:hover{ background: rgba(220,63,74,0.1); }
 
   .dash-grid{ display:grid; grid-template-columns: 1.3fr 1fr; gap: 20px; }
   @media (max-width: 900px){ .dash-grid{ grid-template-columns: 1fr; } }
   .dash-block{ background: var(--bg-card); border: 1px solid var(--line); padding: 20px; }
-  .dash-block h2{ font-family:'Oswald', sans-serif; font-size: 15px; font-weight:600; margin: 0 0 16px; letter-spacing: 0.2px; }
 
   .bar-row{ margin-bottom: 12px; }
   .bar-row .bar-label{ display:flex; justify-content:space-between; font-size: 12.5px; margin-bottom: 5px; color: var(--text-dim); }
@@ -970,6 +1218,11 @@
       <button id="closeTutorialBtn" type="button">✕</button>
     </div>
     <div class="tutorial-body">
+      <div class="tutorial-section">
+        <h3>🤖 Tutoriel interactif</h3>
+        <p style="margin-bottom:10px;">Un guide pas à pas qui vous accompagne directement dans l'application, avec les vrais boutons.</p>
+        <button type="button" class="tutorial-launch-btn" id="launchRechargeTourBtn">💰 Comment recharger mes annonces ?</button>
+      </div>
       <div class="tutorial-section">
         <h3>📢 Demande d'annonce</h3>
         <p>Dans l'onglet <b>Demande</b>, choisissez "Demande d'annonce" dans le menu déroulant. Rédigez votre texte (150 caractères max), choisissez la fréquence de diffusion, la période et la plage horaire. Le récapitulatif à droite indique votre <b>solde disponible</b> — assurez-vous d'avoir assez d'annonces en solde avant d'envoyer.</p>
@@ -1155,6 +1408,7 @@
       <button role="tab" data-target="employes" id="tabBtnEmployes">Employés</button>
       <button role="tab" data-target="direction" id="tabBtnDirection">Direction</button>
       <button role="tab" data-target="particulier" id="tabBtnParticulier">Particulier</button>
+      <button role="tab" data-target="evenement" id="tabBtnEvenement">🎉 Événement</button>
       <button role="tab" data-target="avis" id="tabBtnAvis">Avis</button>
     </nav>
     <div class="clearance">
@@ -1162,6 +1416,10 @@
       <button class="logout-btn" id="logoutBtn">Déconnexion</button>
     </div>
   </header>
+
+  <div class="ticker-banner" id="tickerBanner" style="display:none;">
+    <div class="ticker-track" id="tickerTrack"></div>
+  </div>
 
   <main>
 
@@ -2044,6 +2302,20 @@
           <span id="saveStatusText">Toutes les modifications sont enregistrées automatiquement.</span>
           <button type="button" id="saveAllSettingsBtn">💾 Enregistrer les modifications</button>
         </div>
+
+        <div class="requests-block">
+          <h2>Banderole d'information</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Ce que tu écris ici défile en boucle dans une petite banderole visible par tout le monde (entreprises, employés, particuliers), en haut de l'écran. Tu peux ajouter un ou plusieurs messages.</p>
+          <div class="field-pair" style="margin-bottom:14px;">
+            <div class="field" style="flex:2;">
+              <label for="tickerMessageInput">Nouveau message</label>
+              <input type="text" id="tickerMessageInput" maxlength="200" placeholder="Ex : Fermeture exceptionnelle vendredi à 18h">
+            </div>
+          </div>
+          <button class="ad-submit" id="tickerAddBtn" style="margin-bottom:16px;">Ajouter à la banderole</button>
+          <div id="tickerMessagesList"><p class="requests-empty">Aucun message dans la banderole pour le moment.</p></div>
+        </div>
+
         <div class="requests-block">
           <h2>Grades de rémunération</h2>
           <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Crée les grades de ton choix, chacun avec son propre prix par annonce diffusée.</p>
@@ -2189,6 +2461,134 @@
               <button id="resetBillingBtn">Réinitialiser</button>
             </div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="evenement">
+      <nav class="subtabs" role="tablist" aria-label="Sections événement">
+        <button class="subtab active" role="tab" data-subtarget="evWheel">🎡 Roue de la Fortune</button>
+        <button class="subtab ev-admin-only" role="tab" data-subtarget="evWheelAdmin">⚙️ Gestion Roue</button>
+        <button class="subtab ev-admin-only" role="tab" data-subtarget="evStats">📊 Statistiques</button>
+        <button class="subtab ev-admin-only" role="tab" data-subtarget="evAudit">🗂️ Historique gain entreprise</button>
+      </nav>
+
+      <!-- ---------- Roue de la Fortune (jeu) ---------- -->
+      <div class="subpanel active" id="evWheel">
+        <div class="requests-block">
+          <h2 id="evWheelTitle">Roue de la Fortune</h2>
+          <p id="evWheelRulesText" style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;"></p>
+          <div id="evWheelDisabledMsg" class="requests-empty" style="display:none;">La Roue de la Fortune n'est pas activée pour le moment.</div>
+          <div id="evWheelPlayArea" style="display:none;">
+            <div class="wheel-wrap">
+              <div class="wheel-pointer">▼</div>
+              <div class="wheel-disc" id="wheelDisc"></div>
+            </div>
+            <div id="evWheelLegend" class="wheel-legend"></div>
+            <p id="evWheelStatusMsg" style="font-size:13px; color:var(--text-dim); margin:14px 0;"></p>
+            <button class="ad-submit" id="wheelSpinBtn">🎡 Lancer la roue</button>
+            <div id="evWheelResult" style="margin-top:14px;"></div>
+          </div>
+          <div style="margin-top:24px;">
+            <p style="font-size:12px; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:10px;">Historique de mes gains</p>
+            <div id="evWheelHistory"><p class="requests-empty">Aucun tirage pour le moment.</p></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------- Gestion Roue (Direction) ---------- -->
+      <div class="subpanel" id="evWheelAdmin">
+        <div class="requests-block">
+          <h2>Paramètres de la Roue de la Fortune</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Modifie librement ci-dessous (brouillon) — rien n'est visible par les entreprises tant que tu n'as pas cliqué sur "Publier".</p>
+          <div class="field-pair" style="margin-bottom:14px;">
+            <div class="field">
+              <label for="wheelCfgEnabled">Activer la roue</label>
+              <select id="wheelCfgEnabled"><option value="1">Activée</option><option value="0">Désactivée</option></select>
+            </div>
+            <div class="field">
+              <label for="wheelCfgTitle">Titre affiché</label>
+              <input type="text" id="wheelCfgTitle" maxlength="80">
+            </div>
+          </div>
+          <div class="field-pair" style="margin-bottom:14px;">
+            <div class="field">
+              <label for="wheelCfgSize">Taille de la roue (px)</label>
+              <input type="number" id="wheelCfgSize" min="180" max="520" step="10">
+            </div>
+            <div class="field">
+              <label for="wheelCfgDuration">Durée de l'animation (secondes)</label>
+              <input type="number" id="wheelCfgDuration" min="1" max="15" step="0.5">
+            </div>
+          </div>
+          <div class="field-pair" style="margin-bottom:14px;">
+            <div class="field">
+              <label for="wheelCfgCooldown">Délai entre 2 participations (jours)</label>
+              <input type="number" id="wheelCfgCooldown" min="0" max="90">
+            </div>
+            <div class="field">
+              <label for="wheelCfgMaxSpins">Participations autorisées par période</label>
+              <input type="number" id="wheelCfgMaxSpins" min="1" max="20">
+            </div>
+          </div>
+          <div class="field-pair" style="margin-bottom:14px;">
+            <div class="field">
+              <label for="wheelCfgEventStart">Date de début de l'événement (optionnel)</label>
+              <input type="date" id="wheelCfgEventStart">
+            </div>
+            <div class="field">
+              <label for="wheelCfgEventEnd">Date de fin de l'événement (optionnel)</label>
+              <input type="date" id="wheelCfgEventEnd">
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:14px;">
+            <label for="wheelCfgBeforeMsg">Message affiché avant le tirage</label>
+            <input type="text" id="wheelCfgBeforeMsg" maxlength="200">
+          </div>
+          <div class="field" style="margin-bottom:14px;">
+            <label for="wheelCfgAfterMsg">Message affiché après le tirage (le résultat est ajouté automatiquement)</label>
+            <input type="text" id="wheelCfgAfterMsg" maxlength="200">
+          </div>
+          <div class="field" style="margin-bottom:20px;">
+            <label for="wheelCfgRules">Règles d'utilisation affichées aux entreprises</label>
+            <textarea id="wheelCfgRules" maxlength="400"></textarea>
+          </div>
+
+          <p style="font-size:12px; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:10px;">Cases de la roue</p>
+          <div id="wheelSegmentsEditor"></div>
+          <p id="wheelPercentTotal" style="font-size:12.5px; color:var(--text-dim); margin:6px 0 0;"></p>
+          <button type="button" class="ad-reset" id="wheelAddSegmentBtn" style="margin:12px 0 20px;">+ Ajouter une case</button>
+
+          <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+            <button class="ad-submit" id="wheelPublishBtn">✅ Publier ces modifications</button>
+            <span id="wheelPublishStatus" style="font-size:12.5px; color:var(--text-dim);"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="subpanel" id="evStats">
+        <div class="requests-block">
+          <h2>Statistiques de la Roue de la Fortune</h2>
+          <div class="kpi-row" style="grid-template-columns: repeat(3,1fr);">
+            <div class="kpi"><div class="label">Tours joués (total)</div><div class="value" id="evStatSpins">0</div></div>
+            <div class="kpi"><div class="label">Entreprises ayant déjà tenté leur chance</div><div class="value" id="evStatUniqueCompanies">0</div></div>
+            <div class="kpi"><div class="label">Cases configurées</div><div class="value" id="evStatSegments">0</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------- Historique / Audit (Direction) ---------- -->
+      <div class="subpanel" id="evAudit">
+        <div class="requests-block">
+          <h2>Historique gain entreprise</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Tous les tirages de toutes les entreprises, avec ce qu'elles ont gagné. Coche "Envoyé" une fois le gain remis à l'entreprise.</p>
+          <div id="wheelSpinsHistoryAdmin"></div>
+        </div>
+
+        <div class="requests-block">
+          <h2>Historique / Audit</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Trace de toutes les actions importantes de la Direction sur la Roue de la Fortune (publication, envoi de gain, suppression...).</p>
+          <div id="evAuditList"><p class="requests-empty">Aucune action enregistrée pour le moment.</p></div>
         </div>
       </div>
     </section>
@@ -2340,6 +2740,240 @@
   function formatUSD(n){ return '$' + n.toLocaleString('en-US'); }
   /* ---------- Visionneuse d'image plein écran ---------- */
   const imageLightbox = document.getElementById('imageLightbox');
+
+  /* ================================================================
+     TUTORIEL GUIDÉ INTERACTIF (vrais éléments de l'app, pas de simulation)
+     ================================================================ */
+  const GUIDED_TOUR_STORAGE_PREFIX = 'echonews_tour_';
+  let tourState = null; // { steps, index, storageKey }
+  let tourCurrentTargetEl = null;
+  let tourStepCleanup = null;
+
+  function loadTourProgress(storageKey){
+    try{ return JSON.parse(localStorage.getItem(GUIDED_TOUR_STORAGE_PREFIX + storageKey)); }catch(e){ return null; }
+  }
+  function saveTourProgress(storageKey, index){
+    try{ localStorage.setItem(GUIDED_TOUR_STORAGE_PREFIX + storageKey, JSON.stringify({ index, ts: Date.now() })); }catch(e){}
+  }
+  function clearTourProgress(storageKey){
+    try{ localStorage.removeItem(GUIDED_TOUR_STORAGE_PREFIX + storageKey); }catch(e){}
+  }
+
+  function resolveTourTarget(step){
+    if(typeof step.selector === 'function') return step.selector();
+    return step.selector ? document.querySelector(step.selector) : null;
+  }
+
+  function buildTourBubbleOnce(){
+    if(document.getElementById('guidedTourBubble')) return;
+    const bubble = document.createElement('div');
+    bubble.id = 'guidedTourBubble';
+    bubble.className = 'guided-tour-bubble';
+    bubble.innerHTML = `
+      <div class="guided-tour-progress"><div class="guided-tour-progress-bar" id="guidedTourProgressBar"></div></div>
+      <div class="guided-tour-step-label" id="guidedTourStepLabel"></div>
+      <div class="guided-tour-robot">🤖</div>
+      <div class="guided-tour-text" id="guidedTourText"></div>
+      <div class="guided-tour-actions">
+        <button type="button" id="guidedTourPrevBtn">◀ Précédent</button>
+        <button type="button" id="guidedTourNextBtn" style="display:none;">Suivant ▶</button>
+        <button type="button" id="guidedTourSkipBtn">Passer</button>
+        <button type="button" id="guidedTourCloseBtn">Fermer</button>
+      </div>
+    `;
+    document.body.appendChild(bubble);
+    document.getElementById('guidedTourCloseBtn').addEventListener('click', () => stopGuidedTour(true));
+    document.getElementById('guidedTourSkipBtn').addEventListener('click', () => goToTourStep(tourState.index + 1));
+    document.getElementById('guidedTourPrevBtn').addEventListener('click', () => goToTourStep(tourState.index - 1));
+    document.getElementById('guidedTourNextBtn').addEventListener('click', () => goToTourStep(tourState.index + 1));
+    window.addEventListener('resize', () => { if(tourCurrentTargetEl) positionTourBubble(tourCurrentTargetEl); });
+  }
+
+  function positionTourBubble(targetEl){
+    const bubble = document.getElementById('guidedTourBubble');
+    if(!bubble) return;
+    const isMobile = window.innerWidth < 640;
+    if(!targetEl || isMobile){
+      bubble.classList.add('docked-bottom');
+      bubble.style.top = ''; bubble.style.left = '';
+      return;
+    }
+    bubble.classList.remove('docked-bottom');
+    const rect = targetEl.getBoundingClientRect();
+    const bw = bubble.offsetWidth || 300;
+    const bh = bubble.offsetHeight || 200;
+    let top = rect.bottom + 16;
+    let left = rect.left;
+    if(top + bh > window.innerHeight - 16){ top = rect.top - bh - 16; }
+    if(top < 10) top = 10;
+    if(left + bw > window.innerWidth - 16){ left = window.innerWidth - bw - 16; }
+    if(left < 10) left = 10;
+    bubble.style.top = top + 'px';
+    bubble.style.left = left + 'px';
+  }
+
+  function clearTourTargetHighlight(){
+    if(tourCurrentTargetEl){
+      tourCurrentTargetEl.classList.remove('guided-tour-target');
+      tourCurrentTargetEl = null;
+    }
+    if(tourStepCleanup){ tourStepCleanup(); tourStepCleanup = null; }
+  }
+
+  function goToTourStep(index){
+    if(!tourState) return;
+    clearTourTargetHighlight();
+    if(index < 0) index = 0;
+    if(index >= tourState.steps.length){ stopGuidedTour(false); return; }
+    tourState.index = index;
+    saveTourProgress(tourState.storageKey, index);
+    const step = tourState.steps[index];
+
+    buildTourBubbleOnce();
+    const bubble = document.getElementById('guidedTourBubble');
+    document.getElementById('guidedTourStepLabel').textContent = `Étape ${index + 1} / ${tourState.steps.length}`;
+    document.getElementById('guidedTourProgressBar').style.width = Math.round(((index + 1) / tourState.steps.length) * 100) + '%';
+    document.getElementById('guidedTourText').innerHTML = step.text;
+    document.getElementById('guidedTourPrevBtn').style.display = index === 0 ? 'none' : 'inline-block';
+    document.getElementById('guidedTourNextBtn').style.display = step.waitFor === 'next' || step.waitFor === 'finish' ? 'inline-block' : 'none';
+    document.getElementById('guidedTourSkipBtn').style.display = (index === tourState.steps.length - 1) ? 'none' : 'inline-block';
+    document.getElementById('guidedTourNextBtn').textContent = (index === tourState.steps.length - 1) ? '✅ Terminer' : 'Suivant ▶';
+
+    const tryLocate = (attemptsLeft) => {
+      const targetEl = resolveTourTarget(step);
+      if(!targetEl){
+        if(attemptsLeft > 0){ setTimeout(() => tryLocate(attemptsLeft - 1), 300); return; }
+        // Élément introuvable (page pas encore au bon endroit) : on affiche quand
+        // même le message, ancré en bas, plutôt que de bloquer le tutoriel.
+        positionTourBubble(null);
+        return;
+      }
+      targetEl.classList.add('guided-tour-target');
+      tourCurrentTargetEl = targetEl;
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => positionTourBubble(targetEl), 350);
+
+      if(step.waitFor && step.waitFor !== 'next' && step.waitFor !== 'finish'){
+        if(step.waitFor === 'custom-event'){
+          const handler = (e) => {
+            if(step.matchEvent && !step.matchEvent(e)) return;
+            goToTourStep(tourState.index + 1);
+          };
+          document.addEventListener(step.eventName, handler);
+          tourStepCleanup = () => document.removeEventListener(step.eventName, handler);
+        }else{
+          const handler = () => goToTourStep(tourState.index + 1);
+          targetEl.addEventListener(step.waitFor, handler, { once: true });
+          tourStepCleanup = () => targetEl.removeEventListener(step.waitFor, handler);
+        }
+      }
+    };
+    tryLocate(6);
+  }
+
+  function startGuidedTour(steps, storageKey){
+    tourState = { steps, index: 0, storageKey };
+    goToTourStep(0);
+  }
+
+  function stopGuidedTour(markPaused){
+    clearTourTargetHighlight();
+    const bubble = document.getElementById('guidedTourBubble');
+    if(bubble) bubble.remove();
+    if(!markPaused && tourState) clearTourProgress(tourState.storageKey);
+    tourState = null;
+  }
+
+  function showTourResumeBanner(storageKey, steps, savedIndex){
+    const banner = document.createElement('div');
+    banner.className = 'guided-tour-resume-banner';
+    banner.id = 'guidedTourResumeBanner';
+    banner.innerHTML = `
+      🤖 Vous étiez arrivé à l'étape ${savedIndex + 1}.<br>Voulez-vous reprendre où vous vous êtes arrêté ?
+      <div class="guided-tour-actions">
+        <button type="button" id="tourResumeBtn">▶ Reprendre</button>
+        <button type="button" id="tourRestartBtn">🔄 Recommencer</button>
+      </div>
+    `;
+    document.body.appendChild(banner);
+    document.getElementById('tourResumeBtn').addEventListener('click', () => {
+      banner.remove();
+      startGuidedTour(steps, storageKey);
+      tourState.index = savedIndex;
+      goToTourStep(savedIndex);
+    });
+    document.getElementById('tourRestartBtn').addEventListener('click', () => {
+      banner.remove();
+      clearTourProgress(storageKey);
+      startGuidedTour(steps, storageKey);
+    });
+  }
+
+  function launchTour(steps, storageKey){
+    const saved = loadTourProgress(storageKey);
+    if(saved && typeof saved.index === 'number' && saved.index > 0 && saved.index < steps.length){
+      showTourResumeBanner(storageKey, steps, saved.index);
+    }else{
+      startGuidedTour(steps, storageKey);
+    }
+  }
+
+  /* ---- Parcours réel : "Comment recharger mes annonces ?" ---- */
+  function buildRechargeTourSteps(){
+    return [
+      {
+        selector: '.subtabs .subtab[data-subtarget="entRecharge"]',
+        text: "🤖 Pour commencer, cliquez sur votre profil d'entreprise.",
+        waitFor: 'click'
+      },
+      {
+        selector: '#entRecharge .ad-form h2',
+        text: "🤖 Parfait ! Voici la section « Recharger des annonces ».",
+        waitFor: 'next'
+      },
+      {
+        selector: '#rechargeCount',
+        text: "🤖 Choisissez maintenant le nombre d'annonces que vous souhaitez recharger, puis cliquez sur Suivant.",
+        waitFor: 'next'
+      },
+      {
+        selector: '#rechargeSubmitBtn',
+        text: "🤖 Parfait ! Vérifiez le nombre d'annonces puis cliquez sur « Envoyer la demande de rechargement ».",
+        waitFor: 'click'
+      },
+      {
+        selector: '#myRechargeRequests',
+        text: "🤖 Votre demande a bien été envoyée !<br>Voici la section « Vos demandes de rechargement », où vous pouvez suivre son statut.",
+        waitFor: 'next'
+      },
+      {
+        selector: () => document.querySelector('#myRechargeRequests .paste-zone') || document.querySelector('#myRechargeRequests .history-item'),
+        text: "🤖 Dernière étape importante !<br>Vous devez maintenant fournir une image de votre <b>justificatif de paiement</b>, correspondant exactement au montant de votre demande. Cliquez sur « Choisir une photo » pour l'ajouter.",
+        waitFor: 'custom-event',
+        eventName: 'sky9:recharge-proof-added'
+      },
+      {
+        selector: () => document.querySelector('#myRechargeRequests .badge'),
+        text: "🤖 C'est terminé ! 🎉<br>Votre demande est maintenant en attente de validation par la Direction. Une fois votre paiement et votre demande validés, vos annonces seront automatiquement rechargées.",
+        waitFor: 'next'
+      },
+      {
+        selector: '#profilePostable',
+        text: "🤖 Une fois la demande validée, vous retrouverez votre nouveau solde ici, dans « Annonces postables ».<br>✅ Tutoriel terminé !",
+        waitFor: 'finish'
+      }
+    ];
+  }
+
+  const launchRechargeTourBtn = document.getElementById('launchRechargeTourBtn');
+  if(launchRechargeTourBtn){
+    launchRechargeTourBtn.addEventListener('click', () => {
+      const modal = document.getElementById('tutorialModal');
+      if(modal) modal.classList.remove('show');
+      if(typeof showPanel === 'function') showPanel('entreprises');
+      launchTour(buildRechargeTourSteps(), 'recharge');
+    });
+  }
 
   /* ---------- Tutoriel Entreprise ---------- */
   const tutorialBtn = document.getElementById('tutorialBtn');
@@ -2695,6 +3329,8 @@
     const tabParticulier = document.getElementById('tabBtnParticulier');
     const sessionLabel = document.getElementById('sessionLabel');
 
+    if(typeof renderTickerBanner === 'function') renderTickerBanner();
+
     tabEntreprises.classList.add('hidden-tab');
     tabEmployes.classList.add('hidden-tab');
     tabDirection.classList.add('hidden-tab');
@@ -2810,6 +3446,11 @@
     if(id === 'direction'){ renderDirectionRequests(); renderCompanySummary(); renderOverviewStats(); renderLogs(); }
     if(id === 'employes'){ renderBroadcastPlanning(); renderDutyUI(); }
     if(id === 'avis'){ renderReviewsList(); }
+    if(id === 'evenement'){
+      applyEventAdminVisibility();
+      renderWheelPlay();
+      if(isEventAdmin()){ renderWheelAdminForm(); renderEventStats(); renderEventAudit(); }
+    }
   }
 
   const planningPrevBtn = document.getElementById('planningPrevBtn');
@@ -3003,7 +3644,7 @@
         if(btn.dataset.subtarget === 'dirActive') renderActiveAds();
         if(btn.dataset.subtarget === 'dirSpecial') renderSpecialRequests();
         if(btn.dataset.subtarget === 'dirSpecialActive') renderSpecialActive();
-        if(btn.dataset.subtarget === 'dirSettings'){ renderGradesManagement(); renderGradePermissionsTable(); renderIdentifiants(); renderPricingPicker(); renderCreditCompanyPicker(); renderManualInvoicePicker(); }
+        if(btn.dataset.subtarget === 'dirSettings'){ renderGradesManagement(); renderGradePermissionsTable(); renderIdentifiants(); renderPricingPicker(); renderCreditCompanyPicker(); renderManualInvoicePicker(); renderTickerMessagesList(); }
         if(btn.dataset.subtarget === 'dirSalary') renderSalary();
         if(btn.dataset.subtarget === 'dirOverview'){ renderOverviewStats(); renderCompanySummary(); renderLogs(); }
         if(btn.dataset.subtarget === 'dirTax') renderTax();
@@ -3025,6 +3666,10 @@
         if(btn.dataset.subtarget === 'entRecharge'){ renderRechargeRecap(); renderMyRechargeRequests(); renderCompanyProfile(); renderMyDoneAds(); }
         if(btn.dataset.subtarget === 'entPlanning'){ entPlanningDayOffset = 0; companyPlanningEditingAdId = null; renderCompanyPlanning(); renderMyDoneAds(); }
         if(btn.dataset.subtarget === 'entChat'){ renderEntChatThread(); }
+        if(btn.dataset.subtarget === 'evWheel') renderWheelPlay();
+        if(btn.dataset.subtarget === 'evWheelAdmin') renderWheelAdminForm();
+        if(btn.dataset.subtarget === 'evStats') renderEventStats();
+        if(btn.dataset.subtarget === 'evAudit'){ renderWheelAdminSpinsHistory(); renderEventAudit(); }
         if(btn.dataset.subtarget === 'entJournaliste') renderMyServiceRequests('journaliste', 'myJournalisteRequests');
         if(btn.dataset.subtarget === 'entPhoto') renderMyServiceRequests('photo', 'myPhotoRequests');
         if(btn.dataset.subtarget === 'entInterview') renderMyServiceRequests('interview', 'myInterviewRequests');
@@ -3425,7 +4070,7 @@
             : `<div class="paste-zone" data-id="${r.id}" tabindex="0">Colle une capture (Ctrl+V) ou glisse une image ici pour prouver le paiement<br><label class="file-upload-btn">📁 Choisir une photo<input type="file" accept="image/*" class="proof-file-input" data-id="${r.id}"></label></div>`
           );
       return `
-      <div class="history-item">
+      <div class="history-item" data-recharge-id="${escapeHtml(r.id)}">
         <div>
           <div class="htxt">${escapeHtml(r.text)}</div>
           ${proofHtml}
@@ -3435,46 +4080,72 @@
       </div>
     `;
     }).join('');
+  }
 
-    container.querySelectorAll('.paste-zone').forEach(zone => {
-      function handleFile(file){
-        if(!file || !file.type.startsWith('image/')) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-          const list = loadRequests();
-          const idx = list.findIndex(r => r.id === zone.dataset.id);
-          if(idx === -1) return;
-          list[idx].paymentProof = reader.result;
-          saveRequests(list);
-          addLog(`Justificatif de paiement ajouté par <b>${escapeHtml(list[idx].company)}</b> pour sa demande de rechargement.`);
-          logCompanyHistory(list[idx].company, 'recharge_proof', list[idx].text, { proof: reader.result });
-          renderMyRechargeRequests();
-        };
-        reader.readAsDataURL(file);
-      }
-      zone.addEventListener('paste', (e) => {
-        const items = e.clipboardData ? e.clipboardData.items : [];
-        for(const item of items){
-          if(item.type.startsWith('image/')){ handleFile(item.getAsFile()); break; }
-        }
-      });
-      zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
-      zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
-      zone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        zone.classList.remove('drag-over');
-        const file = e.dataTransfer.files && e.dataTransfer.files[0];
-        handleFile(file);
-      });
-      const fileInput = zone.querySelector('.proof-file-input');
-      if(fileInput){
-        fileInput.addEventListener('click', (e) => e.stopPropagation());
-        fileInput.addEventListener('change', () => {
-          handleFile(fileInput.files && fileInput.files[0]);
-        });
+  // Délégation posée une seule fois sur #myRechargeRequests : fonctionne de façon
+  // fiable pour CHAQUE demande (même s'il y en a plusieurs en attente de justificatif
+  // en même temps), sans dépendre d'un rattachement à chaque nouvel affichage.
+  (function setupRechargeProofDelegation(){
+    const container = document.getElementById('myRechargeRequests');
+    if(!container || container.dataset.proofDelegationReady) return;
+    container.dataset.proofDelegationReady = '1';
+
+    function handleProofFile(zone, file){
+      if(!file || !file.type || !file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const list = loadRequests();
+        const reqId = zone.dataset.id;
+        const idx = list.findIndex(r => r.id === reqId);
+        if(idx === -1) return;
+        list[idx].paymentProof = reader.result;
+        saveRequests(list);
+        addLog(`Justificatif de paiement ajouté par <b>${escapeHtml(list[idx].company)}</b> pour sa demande de rechargement.`);
+        logCompanyHistory(list[idx].company, 'recharge_proof', list[idx].text, { proof: reader.result });
+        renderMyRechargeRequests();
+        // Signal utilisé par le tutoriel guidé (aucun impact si personne n'écoute).
+        document.dispatchEvent(new CustomEvent('sky9:recharge-proof-added', { detail: { requestId: reqId } }));
+      };
+      reader.readAsDataURL(file);
+    }
+
+    container.addEventListener('paste', (e) => {
+      const zone = e.target.closest('.paste-zone');
+      if(!zone) return;
+      const items = e.clipboardData ? e.clipboardData.items : [];
+      for(const item of items){
+        if(item.type && item.type.startsWith('image/')){ handleProofFile(zone, item.getAsFile()); break; }
       }
     });
-  }
+    container.addEventListener('dragover', (e) => {
+      const zone = e.target.closest('.paste-zone');
+      if(!zone) return;
+      e.preventDefault();
+      zone.classList.add('drag-over');
+    });
+    container.addEventListener('dragleave', (e) => {
+      const zone = e.target.closest('.paste-zone');
+      if(zone) zone.classList.remove('drag-over');
+    });
+    container.addEventListener('drop', (e) => {
+      const zone = e.target.closest('.paste-zone');
+      if(!zone) return;
+      e.preventDefault();
+      zone.classList.remove('drag-over');
+      const file = e.dataTransfer.files && e.dataTransfer.files[0];
+      handleProofFile(zone, file);
+    });
+    container.addEventListener('click', (e) => {
+      if(e.target.closest('.proof-file-input')) e.stopPropagation();
+    });
+    container.addEventListener('change', (e) => {
+      const fileInput = e.target.closest('.proof-file-input');
+      if(!fileInput) return;
+      const zone = fileInput.closest('.paste-zone');
+      if(!zone) return;
+      handleProofFile(zone, fileInput.files && fileInput.files[0]);
+    });
+  })();
 
   const rechargeSubmitBtn = document.getElementById('rechargeSubmitBtn');
   if(rechargeSubmitBtn){
@@ -4894,6 +5565,52 @@
     try{ localStorage.setItem(LS_SALARY_LEDGER_KEY, JSON.stringify(list)); }catch(e){}
   }
 
+  // Petite notification temporaire pour expliquer clairement pourquoi une action
+  // n'a pas été prise en compte (au lieu de la laisser silencieusement échouer).
+  function showToast(message){
+    let toast = document.getElementById('globalToast');
+    if(!toast){
+      toast = document.createElement('div');
+      toast.id = 'globalToast';
+      document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.add('show');
+    clearTimeout(toast._hideTimer);
+    toast._hideTimer = setTimeout(() => toast.classList.remove('show'), 4000);
+  }
+
+  // ---------- Petites touches d'interactivité (visuel uniquement) ----------
+  // Effet de vague au clic sur les boutons principaux : purement décoratif,
+  // ne modifie jamais le comportement du clic (pas de preventDefault/stopPropagation).
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.ad-submit, .btn-accept');
+    if(!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const ripple = document.createElement('span');
+    ripple.className = 'btn-ripple';
+    ripple.style.left = (e.clientX - rect.left) + 'px';
+    ripple.style.top = (e.clientY - rect.top) + 'px';
+    btn.appendChild(ripple);
+    setTimeout(() => ripple.remove(), 650);
+  });
+
+  // Petite pluie de confettis (ex: gain à la Roue de la Fortune).
+  function fireConfetti(){
+    const colors = ['#c0392b', '#1f5fa8', '#2f9e6b', '#e8c547', '#8a5cf6'];
+    for(let i = 0; i < 46; i++){
+      const piece = document.createElement('div');
+      piece.className = 'confetti-piece';
+      piece.style.left = (Math.random() * 100) + 'vw';
+      piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+      piece.style.animationDuration = (2 + Math.random() * 1.5) + 's';
+      piece.style.animationDelay = (Math.random() * 0.3) + 's';
+      piece.style.transform = `rotate(${Math.random() * 360}deg)`;
+      document.body.appendChild(piece);
+      setTimeout(() => piece.remove(), 4200);
+    }
+  }
+
   function toggleCompleted(occId, checked, company, adText, adDate, adTime){
     // Sécurité : on vérifie que l'annonce existe toujours et est bien active
     // avant de cocher/décocher quoi que ce soit. Ça évite qu'une case restée
@@ -4902,6 +5619,7 @@
     const adId = occId.slice(0, occId.lastIndexOf('_'));
     const stillValid = loadRequests().some(r => r.id === adId && r.status === 'accepted');
     if(!stillValid){
+      showToast("Impossible : cette annonce n'existe plus (supprimée entre-temps).");
       renderBroadcastPlanning();
       return;
     }
@@ -4910,8 +5628,16 @@
     const myName = session ? session.name : 'Inconnu';
     const isDirectionActor = session && session.role === 'direction';
     if(checked){
-      if(!isOnDuty(myName) && !isDirectionActor){ renderBroadcastPlanning(); return; }
-      if(map[occId] && map[occId].by !== myName && !isDirectionActor){ renderBroadcastPlanning(); return; }
+      if(!isOnDuty(myName) && !isDirectionActor){
+        showToast('Tu dois être "en service" pour cocher une annonce comme diffusée.');
+        renderBroadcastPlanning();
+        return;
+      }
+      if(map[occId] && map[occId].by !== myName && !isDirectionActor){
+        showToast(`Déjà cochée entre-temps par ${map[occId].by}.`);
+        renderBroadcastPlanning();
+        return;
+      }
       map[occId] = { by: myName, at: new Date().toLocaleString('fr-FR'), ts: Date.now(), proof: null };
       if(company) adjustBalance(company, -1);
       logEmployeeDiffusion({
@@ -4922,7 +5648,9 @@
       if(company) logCompanyHistory(company, 'diffusion', adText || 'Annonce diffusée', { at: map[occId].at });
 
       // Ligne de salaire permanente, au tarif du grade de l'employé à cet instant précis.
-      const ledger = loadSalaryLedger();
+      // On retire d'abord toute ligne déjà existante pour cette occurrence (sécurité :
+      // un cocher/décocher/recocher rapide ne doit jamais compter plus d'une fois).
+      const ledger = loadSalaryLedger().filter(l => l.occId !== occId);
       ledger.unshift({
         id: 'sal_' + Date.now() + '_' + Math.random().toString(36).slice(2),
         employee: myName, amount: getGradePriceFor(myName), ts: Date.now(),
@@ -4930,7 +5658,11 @@
       });
       saveSalaryLedger(ledger);
     } else {
-      if(map[occId] && map[occId].by !== myName && !isDirectionActor){ renderBroadcastPlanning(); return; }
+      if(map[occId] && map[occId].by !== myName && !isDirectionActor){
+        showToast(`Impossible de décocher : cochée par ${map[occId].by}, pas par toi.`);
+        renderBroadcastPlanning();
+        return;
+      }
       delete map[occId];
       if(company) adjustBalance(company, 1);
       // On retire la ligne de salaire correspondante (case décochée = erreur annulée).
@@ -5588,6 +6320,7 @@
     { key: 'dirTax', label: "Impôt" },
     { key: 'dirDebts', label: "Facturation" },
     { key: 'dirChat', label: "Chat entreprises" },
+    { key: 'dirEvent', label: "Gestion Événement (Roue de la Fortune)" },
     { key: 'createEmployeeAccounts', label: "Créer des identifiants" }
   ];
 
@@ -5649,6 +6382,578 @@
       });
     });
   }
+
+  /* ---------- Banderole d'information défilante ---------- */
+  const LS_TICKER_KEY = 'echonews_ticker_messages';
+  function loadTickerMessages(){
+    try{
+      const raw = localStorage.getItem(LS_TICKER_KEY);
+      return raw ? JSON.parse(raw) : [];
+    }catch(e){ return []; }
+  }
+  function saveTickerMessages(list){
+    try{ localStorage.setItem(LS_TICKER_KEY, JSON.stringify(list)); }catch(e){}
+  }
+
+  function renderTickerBanner(){
+    const banner = document.getElementById('tickerBanner');
+    const track = document.getElementById('tickerTrack');
+    if(!banner || !track) return;
+    const messages = loadTickerMessages();
+    if(messages.length === 0){
+      banner.style.display = 'none';
+      track.innerHTML = '';
+      track.style.animation = 'none';
+      return;
+    }
+    banner.style.display = 'block';
+    // On répète la série deux fois à la suite pour permettre une boucle
+    // parfaitement continue (translateX de 0 à -50%, sans saut visible).
+    const oneRound = messages.map(m => `<span class="ticker-item">📣 ${escapeHtml(m.text)}</span>`).join('');
+    track.innerHTML = oneRound + oneRound;
+    // Vitesse proportionnelle à la longueur totale du texte, pour une lisibilité constante.
+    const totalChars = messages.reduce((sum, m) => sum + m.text.length, 0);
+    const duration = Math.max(18, totalChars * 0.35);
+    track.style.animation = `ticker-scroll ${duration}s linear infinite`;
+  }
+
+  const tickerAddBtn = document.getElementById('tickerAddBtn');
+  if(tickerAddBtn){
+    tickerAddBtn.addEventListener('click', () => {
+      const input = document.getElementById('tickerMessageInput');
+      const text = input.value.trim();
+      if(!text) return;
+      const list = loadTickerMessages();
+      list.push({ id: 'tick_' + Date.now() + '_' + Math.random().toString(36).slice(2), text });
+      saveTickerMessages(list);
+      input.value = '';
+      renderTickerMessagesList();
+      renderTickerBanner();
+      showSavedIndicator();
+    });
+  }
+
+  function renderTickerMessagesList(){
+    const container = document.getElementById('tickerMessagesList');
+    if(!container) return;
+    const list = loadTickerMessages();
+    container.innerHTML = list.length === 0
+      ? '<p class="requests-empty">Aucun message dans la banderole pour le moment.</p>'
+      : list.map(m => `
+          <div class="account-row" data-id="${escapeHtml(m.id)}">
+            <span class="aname">${escapeHtml(m.text)}</span>
+            <button data-action="delete-ticker" data-id="${escapeHtml(m.id)}">Supprimer</button>
+          </div>
+        `).join('');
+  }
+
+  (function setupTickerDelegation(){
+    const container = document.getElementById('tickerMessagesList');
+    if(!container || container.dataset.tickerDelegationReady) return;
+    container.dataset.tickerDelegationReady = '1';
+    container.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-action="delete-ticker"]');
+      if(!btn) return;
+      saveTickerMessages(loadTickerMessages().filter(m => m.id !== btn.dataset.id));
+      renderTickerMessagesList();
+      renderTickerBanner();
+      showSavedIndicator();
+    });
+  })();
+
+  /* ================================================================
+     ÉVÉNEMENT : Roue de la Fortune
+     ================================================================
+     Important (transparence) : comme le reste de l'appli, tout est stocké
+     dans le même document Firestore partagé (localStorage + sync cloud).
+     Il n'y a pas de vrai chiffrement ni de stockage "sécurisé" séparé pour
+     les photos de pièce d'identité / justificatifs — elles sont traitées
+     exactement comme les autres photos déjà présentes dans l'application.
+  ================================================================ */
+
+  const LS_WHEEL_CONFIG_KEY = 'echonews_wheel_config';
+  const LS_WHEEL_PUBLISHED_KEY = 'echonews_wheel_config_published';
+  const LS_WHEEL_SPINS_KEY = 'echonews_wheel_spins';
+  const LS_EVENT_AUDIT_KEY = 'echonews_event_audit_log';
+
+  function defaultWheelConfig(){
+    return {
+      enabled: false, title: 'Roue de la Fortune', size: 320, spinDurationSec: 5,
+      cooldownDays: 7, maxSpinsPerPeriod: 1, eventStart: '', eventEnd: '',
+      beforeMsg: 'Tente ta chance une fois par semaine !', afterMsg: 'Résultat :',
+      rulesText: '1 participation par semaine et par entreprise. Le gain est crédité manuellement par la Direction.',
+      segments: [
+        { id: 'seg1', label: '500$', color: '#c0392b', weight: 25, reward: '500$ de crédit' },
+        { id: 'seg2', label: '1000$', color: '#1f5fa8', weight: 25, reward: '1000$ de crédit' },
+        { id: 'seg3', label: 'Perdu', color: '#4a4a4a', weight: 25, reward: 'Rien — retente la semaine prochaine' },
+        { id: 'seg4', label: '2000$', color: '#2f9e6b', weight: 25, reward: '2000$ de crédit' }
+      ]
+    };
+  }
+
+  function loadJsonKey(key, fallback){
+    try{
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : fallback;
+    }catch(e){ return fallback; }
+  }
+  function saveJsonKey(key, value){
+    try{ localStorage.setItem(key, JSON.stringify(value)); }catch(e){}
+  }
+
+  function loadWheelDraft(){ return loadJsonKey(LS_WHEEL_CONFIG_KEY, defaultWheelConfig()); }
+  function saveWheelDraft(cfg){ saveJsonKey(LS_WHEEL_CONFIG_KEY, cfg); }
+  function loadWheelPublished(){ return loadJsonKey(LS_WHEEL_PUBLISHED_KEY, null); }
+  function loadWheelSpins(){ return loadJsonKey(LS_WHEEL_SPINS_KEY, []); }
+  function saveWheelSpins(list){ saveJsonKey(LS_WHEEL_SPINS_KEY, list); }
+
+  function logEventAudit(action, detail){
+    const list = loadJsonKey(LS_EVENT_AUDIT_KEY, []);
+    list.unshift({ id: 'aud_' + Date.now() + '_' + Math.random().toString(36).slice(2), ts: Date.now(), by: session ? session.name : 'Inconnu', action, detail: detail || '' });
+    saveJsonKey(LS_EVENT_AUDIT_KEY, list);
+  }
+
+  const EV_STATUS_LABELS = {
+    en_attente: 'En attente', justificatif_recu: 'Justificatif reçu',
+    validee: 'Validée', refusee: 'Refusée', annulee: 'Annulée'
+  };
+  const EV_STATUS_BADGE_CLASS = {
+    en_attente: 'hidden', justificatif_recu: 'hidden', validee: 'accepted', refusee: 'hidden', annulee: 'hidden'
+  };
+
+  /* ---------- Accès admin (Direction, ou employé avec permission dédiée) ---------- */
+  function isEventAdmin(){
+    if(!session) return false;
+    if(session.role === 'direction') return true;
+    if(session.role === 'employe'){
+      const gradeId = loadEmployeeGrades()[session.name];
+      const perms = gradeId ? getGradePermissions(gradeId) : {};
+      return !!perms.dirEvent;
+    }
+    return false;
+  }
+  function applyEventAdminVisibility(){
+    const admin = isEventAdmin();
+    document.querySelectorAll('#evenement .ev-admin-only').forEach(el => {
+      el.classList.toggle('hidden-tab', !admin);
+    });
+  }
+
+  /* ================= ROUE DE LA FORTUNE : jeu ================= */
+  function computeWheelSlices(segments){
+    const totalWeight = segments.reduce((s, seg) => s + (Number(seg.weight) || 0), 0) || 1;
+    let cursor = 0;
+    return segments.map(seg => {
+      const w = Number(seg.weight) || 0;
+      const startDeg = (cursor / totalWeight) * 360;
+      cursor += w;
+      const endDeg = (cursor / totalWeight) * 360;
+      return { seg, startDeg, endDeg, midDeg: (startDeg + endDeg) / 2 };
+    });
+  }
+  function pickWeightedSlice(slices){
+    const totalWeight = slices.reduce((s, sl) => s + ((sl.seg.weight) || 0), 0) || 1;
+    let r = Math.random() * totalWeight;
+    for(const sl of slices){
+      const w = Number(sl.seg.weight) || 0;
+      if(r < w) return sl;
+      r -= w;
+    }
+    return slices[slices.length - 1];
+  }
+
+  function getMyWheelLastSpin(company){
+    const spins = loadWheelSpins().filter(s => s.company === company);
+    if(spins.length === 0) return null;
+    return spins.reduce((a, b) => (b.ts > a.ts ? b : a));
+  }
+
+  function renderWheelPlay(){
+    // La Direction peut aussi voir/tester la roue (pour vérifier ce qu'elle publie),
+    // en plus des entreprises/particuliers qui l'utilisent normalement au quotidien.
+    if(!session || (session.role !== 'entreprise' && session.role !== 'particulier' && session.role !== 'direction')) return;
+    const cfg = loadWheelPublished();
+    const disabledMsg = document.getElementById('evWheelDisabledMsg');
+    const playArea = document.getElementById('evWheelPlayArea');
+    if(!cfg){
+      if(disabledMsg){
+        disabledMsg.style.display = 'block';
+        disabledMsg.textContent = "Aucune configuration n'a encore été publiée. Va dans Gestion Roue, configure les cases, puis clique sur \"Publier ces modifications\".";
+      }
+      if(playArea) playArea.style.display = 'none';
+      return;
+    }
+    if(!cfg.enabled){
+      if(disabledMsg){
+        disabledMsg.style.display = 'block';
+        disabledMsg.textContent = "La roue est publiée mais désactivée. Dans Gestion Roue, mets \"Activer la roue\" sur \"Activée\", puis republie.";
+      }
+      if(playArea) playArea.style.display = 'none';
+      return;
+    }
+    if(!cfg.segments || cfg.segments.length === 0){
+      if(disabledMsg){
+        disabledMsg.style.display = 'block';
+        disabledMsg.textContent = "La roue est activée mais n'a aucune case configurée. Ajoute au moins une case dans Gestion Roue, puis republie.";
+      }
+      if(playArea) playArea.style.display = 'none';
+      return;
+    }
+    if(disabledMsg) disabledMsg.style.display = 'none';
+    if(playArea) playArea.style.display = 'block';
+
+    document.getElementById('evWheelTitle').textContent = cfg.title || 'Roue de la Fortune';
+    document.getElementById('evWheelRulesText').textContent = cfg.rulesText || '';
+
+    const slices = computeWheelSlices(cfg.segments || []);
+    const disc = document.getElementById('wheelDisc');
+    const wheelWrap = document.querySelector('.wheel-wrap');
+    // On fixe la taille voulue sur le CADRE (qui a déjà max-width:100% en CSS pour
+    // rétrécir sur téléphone), pas sur la roue elle-même : elle garde sa largeur
+    // 100% (relative à son cadre) et s'adapte donc toujours à l'écran.
+    if(wheelWrap) wheelWrap.style.width = (cfg.size || 320) + 'px';
+    const gradientParts = slices.map(sl => `${sl.seg.color} ${sl.startDeg}deg ${sl.endDeg}deg`).join(', ');
+    disc.style.background = `conic-gradient(${gradientParts})`;
+    // Étiquettes des gains directement sur la roue (comme une vraie roue de la fortune) :
+    // chaque étiquette part du centre et pointe vers le milieu de sa case.
+    disc.innerHTML = slices.map(sl => `
+      <div class="wheel-slice-label" style="transform: rotate(${sl.midDeg}deg);">
+        <span>${escapeHtml(sl.seg.label)}</span>
+      </div>
+    `).join('');
+
+    const legend = document.getElementById('evWheelLegend');
+    legend.innerHTML = (cfg.segments || []).map(seg => `
+      <span class="wheel-legend-item"><span class="wheel-legend-swatch" style="background:${seg.color};"></span>${escapeHtml(seg.label)}</span>
+    `).join('');
+
+    const companyName = session.name;
+    const lastSpin = getMyWheelLastSpin(companyName);
+    const cooldownMs = (cfg.cooldownDays || 7) * 86400000;
+    const nowTs = Date.now();
+    const eligible = !lastSpin || (nowTs - lastSpin.ts) >= cooldownMs;
+
+    const statusMsg = document.getElementById('evWheelStatusMsg');
+    const spinBtn = document.getElementById('wheelSpinBtn');
+    if(eligible){
+      statusMsg.textContent = cfg.beforeMsg || '';
+      spinBtn.disabled = false;
+      spinBtn.textContent = '🎡 Lancer la roue';
+    }else{
+      const nextTs = lastSpin.ts + cooldownMs;
+      const nextDate = new Date(nextTs);
+      statusMsg.textContent = `Participation déjà utilisée cette semaine. Prochain tour possible le ${nextDate.toLocaleDateString('fr-FR')} à ${nextDate.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'})}.`;
+      spinBtn.disabled = true;
+      spinBtn.textContent = 'Déjà tourné cette semaine';
+    }
+
+    renderWheelMyHistory(companyName);
+  }
+
+  function renderWheelMyHistory(companyName){
+    const container = document.getElementById('evWheelHistory');
+    if(!container) return;
+    const spins = loadWheelSpins().filter(s => s.company === companyName).sort((a,b) => b.ts - a.ts);
+    container.innerHTML = spins.length === 0
+      ? '<p class="requests-empty">Aucun tirage pour le moment.</p>'
+      : spins.map(s => `
+          <div class="account-row">
+            <span class="aname">${new Date(s.ts).toLocaleString('fr-FR')}</span>
+            <span class="acreds">${escapeHtml(s.segmentLabel)} — ${escapeHtml(s.reward || '')}</span>
+            <span class="badge ${s.sent ? 'accepted' : 'hidden'}">${s.sent ? '✅ Gain envoyé' : '⏳ En attente d\'envoi'}</span>
+          </div>
+        `).join('');
+  }
+
+  const wheelSpinBtn = document.getElementById('wheelSpinBtn');
+  if(wheelSpinBtn){
+    wheelSpinBtn.addEventListener('click', () => {
+      if(!session) return;
+      const cfg = loadWheelPublished();
+      if(!cfg || !cfg.enabled || wheelSpinBtn.disabled) return;
+      const companyName = session.name;
+      const lastSpin = getMyWheelLastSpin(companyName);
+      const cooldownMs = (cfg.cooldownDays || 7) * 86400000;
+      if(lastSpin && (Date.now() - lastSpin.ts) < cooldownMs){
+        renderWheelPlay();
+        return;
+      }
+      const slices = computeWheelSlices(cfg.segments || []);
+      if(slices.length === 0) return;
+      const chosen = pickWeightedSlice(slices);
+      const extraSpins = 5 + Math.floor(Math.random() * 3);
+      const targetRotation = extraSpins * 360 - chosen.midDeg;
+      const disc = document.getElementById('wheelDisc');
+      const durationSec = cfg.spinDurationSec || 5;
+      disc.style.transition = `transform ${durationSec}s cubic-bezier(0.15,0.65,0.25,1)`;
+      // Repart de 0 avant de relancer, pour que l'animation soit identique à chaque tour.
+      disc.style.transform = 'rotate(0deg)';
+      void disc.offsetWidth; // force reflow
+      disc.style.transform = `rotate(${targetRotation}deg)`;
+      wheelSpinBtn.disabled = true;
+      wheelSpinBtn.textContent = 'La roue tourne...';
+
+      setTimeout(() => {
+        const spins = loadWheelSpins();
+        const record = {
+          id: 'spin_' + Date.now() + '_' + Math.random().toString(36).slice(2),
+          company: companyName, ts: Date.now(),
+          segmentId: chosen.seg.id, segmentLabel: chosen.seg.label, reward: chosen.seg.reward
+        };
+        spins.unshift(record);
+        saveWheelSpins(spins);
+        addLog(`<b>${escapeHtml(companyName)}</b> a tourné la Roue de la Fortune : ${escapeHtml(chosen.seg.label)}.`);
+        logCompanyHistory(companyName, 'ad_accept', `Roue de la Fortune : ${chosen.seg.label} (${chosen.seg.reward || ''})`, { by: companyName });
+
+        const resultEl = document.getElementById('evWheelResult');
+        if(resultEl){
+          resultEl.innerHTML = `<div class="active-ad-card"><div class="active-ad-top"><span class="aacompany">${escapeHtml(cfg.afterMsg || 'Résultat :')}</span><span class="cstotal" style="font-family:'Oswald',sans-serif; font-weight:600; font-size:18px; color:var(--gold);">${escapeHtml(chosen.seg.label)}</span></div><div class="cs-counts">${escapeHtml(chosen.seg.reward || '')}</div></div>`;
+        }
+        // Petite touche ludique : des confettis si la case n'a pas l'air d'être une perte.
+        const lostWords = ['perdu', 'perdue', 'rien', 'aucun'];
+        const labelLower = (chosen.seg.label || '').toLowerCase();
+        if(typeof fireConfetti === 'function' && !lostWords.some(w => labelLower.includes(w))){
+          fireConfetti();
+        }
+        renderWheelPlay();
+        if(typeof renderWheelAdminSpinsHistory === 'function') renderWheelAdminSpinsHistory();
+        if(typeof renderEventStats === 'function') renderEventStats();
+      }, durationSec * 1000 + 150);
+    });
+  }
+
+  /* ================= ROUE DE LA FORTUNE : administration ================= */
+  function renderWheelSegmentsEditor(){
+    const container = document.getElementById('wheelSegmentsEditor');
+    if(!container) return;
+    const cfg = loadWheelDraft();
+    container.innerHTML = (cfg.segments || []).map((seg, i) => `
+      <div class="wheel-segment-row" data-idx="${i}">
+        <input type="color" class="seg-color" value="${seg.color}">
+        <input type="text" class="seg-label" value="${escapeHtml(seg.label)}" placeholder="Nom de la case">
+        <input type="number" class="seg-weight" value="${seg.weight}" min="0" max="100" step="1" placeholder="% de chance">
+        <input type="text" class="seg-reward" value="${escapeHtml(seg.reward || '')}" placeholder="Récompense">
+        <input type="text" class="seg-id" value="${escapeHtml(seg.id)}" style="display:none;">
+        <button type="button" class="seg-up" title="Monter">▲</button>
+        <button type="button" class="seg-down" title="Descendre">▼</button>
+        <button type="button" class="seg-remove" title="Supprimer">🗑️</button>
+      </div>
+    `).join('');
+    updateWheelPercentTotal();
+  }
+
+  function updateWheelPercentTotal(){
+    const el = document.getElementById('wheelPercentTotal');
+    if(!el) return;
+    const segments = readWheelSegmentsFromEditor();
+    const total = segments.reduce((s, seg) => s + (Number(seg.weight) || 0), 0);
+    if(Math.round(total) === 100){
+      el.style.color = 'var(--gold)';
+      el.textContent = `✓ Total : ${total}% — les chances de chaque case sont exactes.`;
+    }else{
+      el.style.color = 'var(--text-dim)';
+      el.textContent = `Total actuel : ${total}% — idéalement 100% au total (sinon les chances sont recalculées proportionnellement entre elles).`;
+    }
+  }
+
+  function readWheelSegmentsFromEditor(){
+    const rows = document.querySelectorAll('#wheelSegmentsEditor .wheel-segment-row');
+    return Array.from(rows).map(row => ({
+      id: row.querySelector('.seg-id').value,
+      color: row.querySelector('.seg-color').value,
+      label: row.querySelector('.seg-label').value.trim() || 'Case',
+      weight: Math.max(0, parseInt(row.querySelector('.seg-weight').value, 10) || 0),
+      reward: row.querySelector('.seg-reward').value.trim()
+    }));
+  }
+
+  (function setupWheelSegmentsDelegation(){
+    const container = document.getElementById('wheelSegmentsEditor');
+    if(!container || container.dataset.wheelDelegationReady) return;
+    container.dataset.wheelDelegationReady = '1';
+    container.addEventListener('click', (e) => {
+      const row = e.target.closest('.wheel-segment-row');
+      if(!row) return;
+      const idx = parseInt(row.dataset.idx, 10);
+      const cfg = loadWheelDraft();
+      cfg.segments = readWheelSegmentsFromEditor();
+      if(e.target.closest('.seg-remove')){
+        cfg.segments.splice(idx, 1);
+      }else if(e.target.closest('.seg-up') && idx > 0){
+        const tmp = cfg.segments[idx - 1]; cfg.segments[idx - 1] = cfg.segments[idx]; cfg.segments[idx] = tmp;
+      }else if(e.target.closest('.seg-down') && idx < cfg.segments.length - 1){
+        const tmp = cfg.segments[idx + 1]; cfg.segments[idx + 1] = cfg.segments[idx]; cfg.segments[idx] = tmp;
+      }else{
+        return;
+      }
+      saveWheelDraft(cfg);
+      renderWheelSegmentsEditor();
+    });
+    container.addEventListener('change', () => {
+      const cfg = loadWheelDraft();
+      cfg.segments = readWheelSegmentsFromEditor();
+      saveWheelDraft(cfg);
+      updateWheelPercentTotal();
+    });
+    container.addEventListener('input', (e) => {
+      if(e.target.classList.contains('seg-weight')) updateWheelPercentTotal();
+    });
+  })();
+
+  const wheelAddSegmentBtn = document.getElementById('wheelAddSegmentBtn');
+  if(wheelAddSegmentBtn){
+    wheelAddSegmentBtn.addEventListener('click', () => {
+      const cfg = loadWheelDraft();
+      cfg.segments = readWheelSegmentsFromEditor();
+      cfg.segments.push({ id: 'seg_' + Date.now(), color: '#888888', label: 'Nouvelle case', weight: 1, reward: '' });
+      saveWheelDraft(cfg);
+      renderWheelSegmentsEditor();
+    });
+  }
+
+  function renderWheelAdminForm(){
+    if(!isEventAdmin()) return;
+    const cfg = loadWheelDraft();
+    const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val; };
+    setVal('wheelCfgEnabled', cfg.enabled ? '1' : '0');
+    setVal('wheelCfgTitle', cfg.title || '');
+    setVal('wheelCfgSize', cfg.size || 320);
+    setVal('wheelCfgDuration', cfg.spinDurationSec || 5);
+    setVal('wheelCfgCooldown', cfg.cooldownDays || 7);
+    setVal('wheelCfgMaxSpins', cfg.maxSpinsPerPeriod || 1);
+    setVal('wheelCfgEventStart', cfg.eventStart || '');
+    setVal('wheelCfgEventEnd', cfg.eventEnd || '');
+    setVal('wheelCfgBeforeMsg', cfg.beforeMsg || '');
+    setVal('wheelCfgAfterMsg', cfg.afterMsg || '');
+    setVal('wheelCfgRules', cfg.rulesText || '');
+    renderWheelSegmentsEditor();
+
+    const published = loadWheelPublished();
+    const statusEl = document.getElementById('wheelPublishStatus');
+    if(statusEl){
+      statusEl.textContent = published
+        ? `Dernière publication : configuration active (${(published.segments||[]).length} case(s)). Les modifications ci-dessus ne sont pas encore publiées tant que tu ne cliques pas sur "Publier".`
+        : 'Aucune version publiée pour le moment — les entreprises ne voient rien tant que tu ne publies pas.';
+    }
+    renderWheelAdminSpinsHistory();
+  }
+
+  function renderWheelAdminSpinsHistory(){
+    const container = document.getElementById('wheelSpinsHistoryAdmin');
+    if(!container) return;
+    const spins = loadWheelSpins().sort((a,b) => b.ts - a.ts).slice(0, 200);
+    container.innerHTML = spins.length === 0
+      ? '<p class="requests-empty">Aucun tirage pour le moment.</p>'
+      : spins.map(s => `
+          <div class="account-row" data-spin-id="${escapeHtml(s.id)}" style="${s.sent ? 'opacity:.6;' : ''}">
+            <span class="aname">${escapeHtml(s.company)}${s.sent ? ' ✅' : ''}</span>
+            <span class="acreds">${new Date(s.ts).toLocaleString('fr-FR')} — ${escapeHtml(s.segmentLabel)} (${escapeHtml(s.reward || '')})</span>
+            <label style="display:flex; align-items:center; gap:6px; font-family:'IBM Plex Mono', monospace; font-size:11.5px; color: var(--text-dim); cursor:pointer;">
+              <input type="checkbox" data-action="wheel-sent" data-id="${escapeHtml(s.id)}" ${s.sent ? 'checked' : ''}>
+              Envoyé
+            </label>
+          </div>
+        `).join('');
+  }
+
+  // Délégation posée une seule fois : coche/décoche "Envoyé" pour un gain précis,
+  // fonctionne de façon fiable même après un rafraîchissement automatique.
+  (function setupWheelSentDelegation(){
+    const container = document.getElementById('wheelSpinsHistoryAdmin');
+    if(!container || container.dataset.wheelSentDelegationReady) return;
+    container.dataset.wheelSentDelegationReady = '1';
+    container.addEventListener('change', (e) => {
+      const cb = e.target.closest('input[data-action="wheel-sent"]');
+      if(!cb) return;
+      const spins = loadWheelSpins();
+      const spin = spins.find(s => s.id === cb.dataset.id);
+      if(!spin) return;
+      spin.sent = cb.checked;
+      spin.sentBy = cb.checked ? (session ? session.name : 'Direction') : null;
+      spin.sentAt = cb.checked ? Date.now() : null;
+      saveWheelSpins(spins);
+      const by = session ? session.name : 'Direction';
+      logEventAudit('wheel_sent', `${cb.checked ? 'Gain marqué comme envoyé' : 'Gain remis en "non envoyé"'} pour ${spin.company} (${spin.segmentLabel}) par ${by}`);
+      showSavedIndicator();
+      if(typeof renderEventAudit === 'function') renderEventAudit();
+    });
+  })();
+
+  ['wheelCfgEnabled','wheelCfgTitle','wheelCfgSize','wheelCfgDuration','wheelCfgCooldown','wheelCfgMaxSpins','wheelCfgEventStart','wheelCfgEventEnd','wheelCfgBeforeMsg','wheelCfgAfterMsg','wheelCfgRules'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el){
+      el.addEventListener('change', () => {
+        const cfg = loadWheelDraft();
+        cfg.enabled = document.getElementById('wheelCfgEnabled').value === '1';
+        cfg.title = document.getElementById('wheelCfgTitle').value.trim();
+        cfg.size = parseInt(document.getElementById('wheelCfgSize').value, 10) || 320;
+        cfg.spinDurationSec = parseFloat(document.getElementById('wheelCfgDuration').value) || 5;
+        cfg.cooldownDays = parseInt(document.getElementById('wheelCfgCooldown').value, 10) || 7;
+        cfg.maxSpinsPerPeriod = parseInt(document.getElementById('wheelCfgMaxSpins').value, 10) || 1;
+        cfg.eventStart = document.getElementById('wheelCfgEventStart').value;
+        cfg.eventEnd = document.getElementById('wheelCfgEventEnd').value;
+        cfg.beforeMsg = document.getElementById('wheelCfgBeforeMsg').value;
+        cfg.afterMsg = document.getElementById('wheelCfgAfterMsg').value;
+        cfg.rulesText = document.getElementById('wheelCfgRules').value;
+        saveWheelDraft(cfg);
+      });
+    }
+  });
+
+  const wheelPublishBtn = document.getElementById('wheelPublishBtn');
+  if(wheelPublishBtn){
+    wheelPublishBtn.addEventListener('click', () => {
+      const cfg = loadWheelDraft();
+      cfg.segments = readWheelSegmentsFromEditor();
+      saveWheelDraft(cfg);
+      if(!cfg.enabled){
+        const ok = window.confirm('Attention : "Activer la roue" est réglé sur "Désactivée". Une fois publiée, personne ne verra la roue tant que tu ne la passes pas sur "Activée" (puis republies). Publier quand même ?');
+        if(!ok) return;
+      }
+      if(!cfg.segments || cfg.segments.length === 0){
+        window.alert('Ajoute au moins une case avant de publier — la roue ne peut pas être jouée sans case.');
+        return;
+      }
+      saveJsonKey(LS_WHEEL_PUBLISHED_KEY, JSON.parse(JSON.stringify(cfg)));
+      logEventAudit('wheel_publish', `Roue publiée (${cfg.segments.length} case(s), activée: ${cfg.enabled ? 'oui' : 'non'})`);
+      addLog(`La Direction a publié une nouvelle configuration de la Roue de la Fortune.`);
+      renderWheelAdminForm();
+      renderWheelPlay();
+      showSavedIndicator();
+      if(typeof renderEventAudit === 'function') renderEventAudit();
+      showToast(cfg.enabled ? '✓ Roue publiée et activée — visible par les entreprises.' : '⚠️ Roue publiée mais désactivée — invisible tant que non activée.');
+    });
+  }
+
+  /* ================= Statistiques ================= */
+  function renderEventStats(){
+    if(!isEventAdmin()) return;
+    const spins = loadWheelSpins();
+    const cfg = loadWheelDraft();
+    const setText = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+    setText('evStatSpins', spins.length);
+    setText('evStatUniqueCompanies', new Set(spins.map(s => s.company)).size);
+    setText('evStatSegments', (cfg.segments || []).length);
+  }
+
+  /* ================= Historique / Audit ================= */
+  function renderEventAudit(){
+    const container = document.getElementById('evAuditList');
+    if(!container || !isEventAdmin()) return;
+    const list = loadJsonKey(LS_EVENT_AUDIT_KEY, []).sort((a,b) => b.ts - a.ts).slice(0, 200);
+    container.innerHTML = list.length === 0
+      ? '<p class="requests-empty">Aucune action enregistrée pour le moment.</p>'
+      : list.map(a => `
+          <div class="account-row">
+            <span class="aname">${new Date(a.ts).toLocaleString('fr-FR')} — ${escapeHtml(a.by)}</span>
+            <span class="acreds">${escapeHtml(a.detail)}</span>
+          </div>
+        `).join('');
+  }
+
+  /* Photos pièce d'identité / justificatif (.proof-thumb) : agrandissement au clic
+     déjà géré par le mécanisme de lightbox global existant ailleurs dans l'appli
+     (voir imageLightbox / openImageLightbox, posé une fois pour toute l'application). */
 
   function renderGradesManagement(){
     const gradesContainer = document.getElementById('gradesList');
@@ -5788,24 +7093,57 @@
     const dirSalaryListEl = document.getElementById('dirSalaryList');
     if(dirSalaryListEl){
       dirSalaryListEl.innerHTML = html;
-      if(isDirection){
-        dirSalaryListEl.querySelectorAll('.salary-detail-btn').forEach(btn => {
-          btn.addEventListener('click', () => {
-            const name = btn.dataset.employee;
-            const zone = dirSalaryListEl.querySelector(`.salary-detail-zone[data-salary-detail="${CSS.escape(name)}"]`);
-            if(!zone) return;
-            const isOpen = zone.style.display !== 'none';
-            dirSalaryListEl.querySelectorAll('.salary-detail-zone').forEach(z => z.style.display = 'none');
-            if(isOpen) return;
-            renderSalaryDetailZone(zone, name);
-            zone.style.display = 'block';
-          });
-        });
-      }
     }
 
     renderSalaryCorrectionPicker();
   }
+
+  // Délégation d'événements posée UNE SEULE FOIS sur #dirSalaryList : le "Voir le
+  // détail / corriger" est régulièrement reconstruit (à chaque synchronisation,
+  // toutes les 4 secondes en Direction...), ce qui fermait la zone de détail ou
+  // rendait le bouton inerte juste au moment du clic. La délégation règle ça
+  // définitivement, comme pour le planning employé.
+  (function setupSalaryDelegation(){
+    const container = document.getElementById('dirSalaryList');
+    if(!container || container.dataset.salaryDelegationReady) return;
+    container.dataset.salaryDelegationReady = '1';
+
+    container.addEventListener('click', (e) => {
+      const detailBtn = e.target.closest('.salary-detail-btn');
+      if(detailBtn){
+        const name = detailBtn.dataset.employee;
+        const zone = container.querySelector(`.salary-detail-zone[data-salary-detail="${CSS.escape(name)}"]`);
+        if(!zone) return;
+        const isOpen = zone.style.display !== 'none';
+        container.querySelectorAll('.salary-detail-zone').forEach(z => z.style.display = 'none');
+        if(isOpen) return;
+        renderSalaryDetailZone(zone, name);
+        zone.style.display = 'block';
+        return;
+      }
+
+      const deleteBtn = e.target.closest('button[data-action="delete-salary-line"]');
+      if(deleteBtn){
+        const zone = deleteBtn.closest('.salary-detail-zone');
+        const employeeName = zone ? zone.dataset.salaryDetail : null;
+        const list = loadSalaryLedger();
+        const idx = list.findIndex(l => l.id === deleteBtn.dataset.id);
+        if(idx === -1) return;
+        const removed = list[idx];
+        list.splice(idx, 1);
+        saveSalaryLedger(list);
+        const by = session ? session.name : 'Direction';
+        addLog(`Ligne de salaire de <b>${formatUSD(removed.amount)}</b> supprimée pour <b>${escapeHtml(employeeName || removed.employee)}</b> par <b>${escapeHtml(by)}</b>.`);
+        renderSalary();
+        if(employeeName){
+          const refreshedZone = container.querySelector(`.salary-detail-zone[data-salary-detail="${CSS.escape(employeeName)}"]`);
+          if(refreshedZone){ renderSalaryDetailZone(refreshedZone, employeeName); refreshedZone.style.display = 'block'; }
+        }
+        showSavedIndicator();
+        return;
+      }
+    });
+  })();
 
   function renderSalaryDetailZone(zone, employeeName){
     const entries = loadSalaryLedger().filter(l => l.employee === employeeName).sort((a,b) => b.ts - a.ts);
@@ -5816,21 +7154,9 @@
         <button data-action="delete-salary-line" data-id="${escapeHtml(l.id)}">Supprimer</button>
       </div>
     `).join('') || '<p class="requests-empty">Aucune ligne pour cet employé.</p>';
-
-    zone.querySelectorAll('button[data-action="delete-salary-line"]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const list = loadSalaryLedger();
-        const idx = list.findIndex(l => l.id === btn.dataset.id);
-        if(idx === -1) return;
-        const removed = list[idx];
-        list.splice(idx, 1);
-        saveSalaryLedger(list);
-        const by = session ? session.name : 'Direction';
-        addLog(`Ligne de salaire de <b>${formatUSD(removed.amount)}</b> supprimée pour <b>${escapeHtml(employeeName)}</b> par <b>${escapeHtml(by)}</b>.`);
-        renderSalary();
-        showSavedIndicator();
-      });
-    });
+    // Le clic sur "Supprimer" est géré par délégation (setupSalaryDelegation),
+    // posée une seule fois sur #dirSalaryList — pas besoin de rattacher quoi
+    // que ce soit ici à chaque construction de la zone de détail.
   }
 
   function renderSalaryCorrectionPicker(){
@@ -6774,7 +8100,9 @@
     'echonews_company_prices', 'echonews_company_balances', 'echonews_grade_permissions',
     'echonews_week_expenses', 'echonews_revenue_reset_marker', 'echonews_debt_adjustments',
     'echonews_company_payments', 'echonews_reviews', 'echonews_salary_ledger', 'echonews_tombstones',
-    'echonews_chats'
+    'echonews_chats', 'echonews_ticker_messages',
+    'echonews_wheel_config', 'echonews_wheel_config_published', 'echonews_wheel_spins',
+    'echonews_event_audit_log'
   ];
 
   let cloudDb = null;
@@ -6821,6 +8149,27 @@
         if(changed) _origSetItem('echonews_tombstones', JSON.stringify(tombstones));
       }
 
+      // Certaines cartes servent à un état qu'on active/désactive librement (cocher
+      // puis décocher puis recocher une diffusion, se mettre en service puis hors
+      // service...). Une clé retirée de CES cartes précises n'est PAS une suppression
+      // définitive : il ne faut jamais créer de "tombstone" pour elles, sinon
+      // décocher une case empêchait ensuite de la recocher correctement pour tout le
+      // monde (la case restait cochée chez celui qui l'avait faite, mais réapparaissait
+      // toujours décochée pour les autres, la fusion excluant la clé pour toujours).
+      const TOMBSTONE_EXEMPT_KEYS = ['echonews_completed_ads', 'echonews_duty_status'];
+      // Nettoyage ponctuel des tombstones déjà enregistrés par erreur avant ce correctif.
+      (function purgeBadTombstones(){
+        const tombstones = loadTombstones();
+        let changed = false;
+        Object.keys(tombstones).forEach(tKey => {
+          if(TOMBSTONE_EXEMPT_KEYS.some(k => tKey.startsWith(k + '::'))){
+            delete tombstones[tKey];
+            changed = true;
+          }
+        });
+        if(changed) _origSetItem('echonews_tombstones', JSON.stringify(tombstones));
+      })();
+
       function detectKeyField(localVal, remoteVal){
         const sample = (Array.isArray(localVal) && localVal[0]) || (Array.isArray(remoteVal) && remoteVal[0]);
         if(!sample || typeof sample !== 'object') return null;
@@ -6833,7 +8182,7 @@
       // (avec un léger délai anti-rafale) un envoi vers Firestore, et repère au
       // passage tout élément retiré d'un tableau pour l'enregistrer comme supprimé.
       localStorage.setItem = function(key, value){
-        if(CLOUD_SYNCED_KEYS.includes(key) && key !== 'echonews_tombstones'){
+        if(CLOUD_SYNCED_KEYS.includes(key) && key !== 'echonews_tombstones' && !TOMBSTONE_EXEMPT_KEYS.includes(key)){
           try{
             const oldRaw = _origGetItem(key);
             const oldVal = oldRaw ? JSON.parse(oldRaw) : null;
@@ -6977,7 +8326,9 @@
           'renderPricingPicker', 'renderCreditCompanyPicker', 'renderManualInvoicePicker', 'renderTax',
           'renderOverviewStats', 'renderWeeklyCompanyRecap', 'renderReviewsList', 'renderDirectionRequests',
           'applyEmployeeDirectionAccess', 'renderRechargeRecap',
-          'renderEntChatThread', 'renderDirChatThread', 'checkForNewChatMessages'
+          'renderEntChatThread', 'renderDirChatThread', 'checkForNewChatMessages', 'renderTickerBanner',
+          'renderWheelPlay', 'renderWheelAdminForm',
+          'renderEventStats', 'renderEventAudit'
           // 'applySession' retiré volontairement : il forçait un retour sur l'onglet
           // principal du rôle et un scroll en haut de page à CHAQUE synchronisation
           // cloud (y compris pour ses propres actions), ce qui donnait l'impression
