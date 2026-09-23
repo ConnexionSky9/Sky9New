@@ -9261,6 +9261,20 @@
         subKeys.forEach(sk => { ts[cloudKey + '::' + sk] = { ts: now, value: changedEntries[sk] }; });
         _origSetItem('echonews_map_timestamps', JSON.stringify(ts));
       }
+      // IMPORTANT : "echonews_map_timestamps" doit toujours être fusionné et écrit
+      // localement EN PREMIER, avant toute autre clé — sinon, en traitant par
+      // exemple "echonews_grade_permissions" avant lui dans la même synchronisation,
+      // on lirait encore l'ancienne copie locale de "echonews_map_timestamps" (pas
+      // encore mise à jour avec ce que le serveur vient d'envoyer), ce qui pouvait
+      // faire échouer à tort la reconnaissance d'un changement fait sur un autre
+      // appareil — empêchant Lola de recevoir un accès qu'on venait de lui donner.
+      function resolveMapTimestampsFirst(remoteRawForThisKey){
+        const localRaw = _origGetItem('echonews_map_timestamps');
+        const merged = mergedValueForKey('echonews_map_timestamps', localRaw, remoteRawForThisKey);
+        if(merged === null) return;
+        const mergedStr = JSON.stringify(merged);
+        if(mergedStr !== localRaw) _origSetItem('echonews_map_timestamps', mergedStr);
+      }
 
       function detectKeyField(localVal, remoteVal){
         const sample = (Array.isArray(localVal) && localVal[0]) || (Array.isArray(remoteVal) && remoteVal[0]);
@@ -9411,7 +9425,14 @@
             const known = mapTimestamps[cloudKey + '::' + k2];
             if(known && 'value' in known){
               merged[k2] = known.value;
-            }else if(!(k2 in remoteVal)){
+            }else{
+              // Aucun historique d'horodatage exploitable pour trancher : on fait
+              // confiance à la copie locale plutôt qu'au serveur par défaut. Cette
+              // copie locale vient de persister correctement à travers un
+              // rafraîchissement de page — la reconnexion automatique et le filet
+              // de sécurité s'occupent déjà du cas d'un appareil resté bloqué, donc
+              // ce repli n'a plus besoin de "protéger" contre ça au prix d'écraser
+              // une modification locale pourtant correcte et récente.
               merged[k2] = localVal[k2];
             }
             // sinon : remote déjà en place dans "merged", on le garde par défaut.
@@ -9449,6 +9470,7 @@
         try{
           const snap = await cloudDocRef.get();
           const remote = snap.exists ? (snap.data() || {}) : {};
+          resolveMapTimestampsFirst(Object.prototype.hasOwnProperty.call(remote, 'echonews_map_timestamps') ? remote['echonews_map_timestamps'] : null);
           const payload = {};
           CLOUD_SYNCED_KEYS.forEach(k => {
             const localRaw = localStorage.getItem(k);
@@ -9528,6 +9550,7 @@
           if(snap.exists){
             const data = snap.data();
             cloudApplyingRemote = true;
+            resolveMapTimestampsFirst(Object.prototype.hasOwnProperty.call(data, 'echonews_map_timestamps') ? data['echonews_map_timestamps'] : null);
             let anyChange = false;
             CLOUD_SYNCED_KEYS.forEach(k => {
               if(!Object.prototype.hasOwnProperty.call(data, k)) return;
