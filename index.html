@@ -8200,6 +8200,7 @@
       // (avec un léger délai anti-rafale) un envoi vers Firestore, et repère au
       // passage tout élément retiré d'un tableau pour l'enregistrer comme supprimé.
       localStorage.setItem = function(key, value){
+        let finalValue = value;
         if(CLOUD_SYNCED_KEYS.includes(key) && key !== 'echonews_tombstones' && !TOMBSTONE_EXEMPT_KEYS.includes(key)){
           try{
             const oldRaw = _origGetItem(key);
@@ -8208,6 +8209,26 @@
             if(Array.isArray(oldVal) && Array.isArray(newVal)){
               const keyField = detectKeyField(oldVal, newVal);
               if(keyField){
+                // Horodatage automatique par élément réellement modifié. Sans ça, la
+                // fusion cloud privilégiait TOUJOURS la copie locale en cas de conflit
+                // sur le même id — mais si cet appareil n'avait pas encore reçu une
+                // modification plus récente faite ailleurs (ex: une demande validée sur
+                // un autre PC), sa copie "en retard" pouvait écraser la bonne version.
+                // Avec cet horodatage, la fusion garde désormais la version réellement
+                // la plus récente, peu importe l'appareil d'où elle vient.
+                const oldById = new Map();
+                oldVal.forEach(x => { if(x && typeof x === 'object' && x[keyField] !== undefined) oldById.set(x[keyField], x); });
+                const stripTs = (o) => { const c = Object.assign({}, o); delete c._modifiedAt; return c; };
+                const now = Date.now();
+                newVal.forEach(item => {
+                  if(!item || typeof item !== 'object') return;
+                  const prev = oldById.get(item[keyField]);
+                  if(!prev){ item._modifiedAt = now; }
+                  else if(JSON.stringify(stripTs(prev)) !== JSON.stringify(stripTs(item))){ item._modifiedAt = now; }
+                  else{ item._modifiedAt = (typeof prev._modifiedAt === 'number') ? prev._modifiedAt : now; }
+                });
+                finalValue = JSON.stringify(newVal);
+
                 const newIds = new Set(newVal.filter(x => x && typeof x === 'object').map(x => x[keyField]));
                 const removedIds = oldVal
                   .filter(x => x && typeof x === 'object' && x[keyField] !== undefined && !newIds.has(x[keyField]))
@@ -8222,7 +8243,7 @@
             }
           }catch(e){}
         }
-        _origSetItem(key, value);
+        _origSetItem(key, finalValue);
         if(cloudReady && !cloudApplyingRemote && CLOUD_SYNCED_KEYS.includes(key)){
           clearTimeout(cloudPushTimer);
           cloudPushTimer = setTimeout(pushStateToCloud, 700);
@@ -8251,7 +8272,20 @@
             localVal.forEach(item => {
               const k = item[keyField]; if(k === undefined) return;
               if(isTombstoned(tombstones, cloudKey, k)) return;
-              if(!map.has(k)) order.push(k); map.set(k, item);
+              if(!map.has(k)){
+                order.push(k);
+                map.set(k, item);
+              }else{
+                // Les deux côtés ont cet id : on garde la version réellement la plus
+                // récente (par horodatage _modifiedAt), jamais automatiquement la
+                // locale — sinon une copie simplement en retard sur cet appareil
+                // pouvait écraser une modification plus récente faite ailleurs
+                // (ex : une demande de rechargement validée sur un autre PC).
+                const existing = map.get(k);
+                const existingTs = (existing && typeof existing._modifiedAt === 'number') ? existing._modifiedAt : 0;
+                const itemTs = (item && typeof item._modifiedAt === 'number') ? item._modifiedAt : 0;
+                if(itemTs >= existingTs) map.set(k, item);
+              }
             });
             return order.map(k => map.get(k));
           }
