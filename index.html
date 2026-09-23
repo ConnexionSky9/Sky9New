@@ -4136,7 +4136,15 @@
       handleProofFile(zone, file);
     });
     container.addEventListener('click', (e) => {
-      if(e.target.closest('.proof-file-input')) e.stopPropagation();
+      if(e.target.closest('.proof-file-input')){ e.stopPropagation(); return; }
+      // Déclenchement explicite du sélecteur de fichier au clic sur le bouton/label
+      // (plus fiable que de compter uniquement sur le comportement natif label→input,
+      // qui peut ne pas se déclencher correctement selon le navigateur/contexte).
+      const label = e.target.closest('.file-upload-btn');
+      if(label){
+        const fileInput = label.querySelector('.proof-file-input');
+        if(fileInput){ e.preventDefault(); fileInput.click(); }
+      }
     });
     container.addEventListener('change', (e) => {
       const fileInput = e.target.closest('.proof-file-input');
@@ -5079,7 +5087,14 @@
       handleProofFile(zone, file);
     });
     container.addEventListener('click', (e) => {
-      if(e.target.closest('.proof-file-input')) e.stopPropagation();
+      if(e.target.closest('.proof-file-input')){ e.stopPropagation(); return; }
+      // Déclenchement explicite du sélecteur de fichier au clic sur le bouton/label
+      // (plus fiable que de compter uniquement sur le comportement natif label→input).
+      const label = e.target.closest('.file-upload-btn');
+      if(label){
+        const fileInput = label.querySelector('.proof-file-input');
+        if(fileInput){ e.preventDefault(); fileInput.click(); }
+      }
     });
     container.addEventListener('change', (e) => {
       const fileInput = e.target.closest('.proof-file-input');
@@ -6616,8 +6631,11 @@
     disc.style.background = `conic-gradient(${gradientParts})`;
     // Étiquettes des gains directement sur la roue (comme une vraie roue de la fortune) :
     // chaque étiquette part du centre et pointe vers le milieu de sa case.
+    // IMPORTANT : le div d'étiquette part par défaut vers la droite (3h), alors que
+    // conic-gradient part du haut (12h, 0deg) — d'où le décalage de -90deg ci-dessous,
+    // sans quoi chaque texte tombait sur la case voisine au lieu de la sienne.
     disc.innerHTML = slices.map(sl => `
-      <div class="wheel-slice-label" style="transform: rotate(${sl.midDeg}deg);">
+      <div class="wheel-slice-label" style="transform: rotate(${sl.midDeg - 90}deg);">
         <span>${escapeHtml(sl.seg.label)}</span>
       </div>
     `).join('');
