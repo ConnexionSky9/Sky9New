@@ -2302,6 +2302,7 @@
           <span id="saveStatusText">Toutes les modifications sont enregistrées automatiquement.</span>
           <button type="button" id="saveAllSettingsBtn">💾 Enregistrer les modifications</button>
           <button type="button" id="forceResyncBtn" style="margin-left:8px;">🔄 Forcer la resynchronisation</button>
+          <button type="button" id="exportBackupBtn" style="margin-left:8px;">📥 Exporter une sauvegarde (JSON)</button>
         </div>
 
         <div class="requests-block">
@@ -3262,6 +3263,75 @@
       }else{
         forceResyncBtn.disabled = false;
         forceResyncBtn.textContent = originalText;
+      }
+    });
+  }
+
+  // Export de sauvegarde : lecture seule, aucune écriture, donc aucun risque pour
+  // les données. Récupère la version la plus à jour possible (depuis le serveur si
+  // disponible, sinon la copie locale) et la propose en téléchargement JSON.
+  const exportBackupBtn = document.getElementById('exportBackupBtn');
+  if(exportBackupBtn){
+    exportBackupBtn.addEventListener('click', () => {
+      const buildAndDownload = (source) => {
+        const backup = { exportedAt: new Date().toISOString(), source, data: {} };
+        CLOUD_SYNCED_KEYS.forEach(k => {
+          const raw = localStorage.getItem(k);
+          if(raw !== null){
+            try{ backup.data[k] = JSON.parse(raw); }catch(e){ backup.data[k] = raw; }
+          }
+        });
+        const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `sky9-sauvegarde-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        if(typeof showToast === 'function') showToast('✓ Sauvegarde téléchargée (' + Object.keys(backup.data).length + ' clé(s)).');
+      };
+      exportBackupBtn.disabled = true;
+      const original = exportBackupBtn.textContent;
+      exportBackupBtn.textContent = 'Préparation...';
+      if(cloudDocRef){
+        cloudDocRef.get().then(snap => {
+          if(snap.exists){
+            // On fusionne le local (jamais écrit nulle part) avec le serveur, juste
+            // pour construire le fichier — aucune sauvegarde locale n'est modifiée.
+            const remote = snap.data();
+            const backup = { exportedAt: new Date().toISOString(), source: 'serveur (Firestore)', data: {} };
+            CLOUD_SYNCED_KEYS.forEach(k => {
+              const raw = Object.prototype.hasOwnProperty.call(remote, k) ? remote[k] : localStorage.getItem(k);
+              if(raw !== null && raw !== undefined){
+                try{ backup.data[k] = JSON.parse(raw); }catch(e){ backup.data[k] = raw; }
+              }
+            });
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `sky9-sauvegarde-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+            if(typeof showToast === 'function') showToast('✓ Sauvegarde téléchargée depuis le serveur (' + Object.keys(backup.data).length + ' clé(s)).');
+          }else{
+            buildAndDownload('local (aucune donnée serveur trouvée)');
+          }
+          exportBackupBtn.disabled = false;
+          exportBackupBtn.textContent = original;
+        }).catch(() => {
+          buildAndDownload('local (serveur injoignable)');
+          exportBackupBtn.disabled = false;
+          exportBackupBtn.textContent = original;
+        });
+      }else{
+        buildAndDownload('local');
+        exportBackupBtn.disabled = false;
+        exportBackupBtn.textContent = original;
       }
     });
   }
@@ -8625,12 +8695,16 @@
         });
       };
 
-      // Filet de sécurité supplémentaire : indépendamment de l'écouteur temps réel
-      // ci-dessus, on force une resynchronisation complète toutes les 15 secondes.
-      // Même si la reconnexion automatique avait un cas limite non couvert, aucun
-      // appareil ne peut donc rester durablement désynchronisé.
-      setInterval(() => {
+      // Le serveur est la référence : toutes les 15 secondes (et immédiatement au
+      // retour sur l'onglet), on adopte directement sa version plutôt que d'essayer
+      // de "deviner" une fusion — à ce rythme, toute modification locale a déjà
+      // largement eu le temps d'être envoyée (le délai d'envoi est de 700ms).
+      // Sécurité : si un envoi est encore en attente au moment précis du cycle, on
+      // saute ce tour pour ne jamais écraser une action que l'utilisateur vient de
+      // faire à l'instant.
+      function adoptServerState(){
         if(!cloudDocRef) return;
+        if(cloudPushTimer) return; // un envoi local est en attente : on attend le prochain cycle
         cloudDocRef.get().then(snap => {
           if(!snap.exists) return;
           const data = snap.data();
@@ -8639,45 +8713,35 @@
           CLOUD_SYNCED_KEYS.forEach(k => {
             if(!Object.prototype.hasOwnProperty.call(data, k)) return;
             const localRaw = _origGetItem(k);
-            const merged = mergedValueForKey(k, localRaw, data[k]);
-            if(merged === null) return;
-            const mergedStr = JSON.stringify(merged);
-            if(mergedStr !== localRaw){
-              _origSetItem(k, mergedStr);
+            if(data[k] !== localRaw){
+              _origSetItem(k, data[k]);
               anyChange = true;
             }
           });
           cloudApplyingRemote = false;
           if(anyChange) refreshAllViewsFromCloud();
         }).catch(err => cloudLog('Échec de la resynchronisation périodique :', err));
-      }, 15000);
+      }
+      setInterval(adoptServerState, 15000);
 
       // Si l'onglet redevient visible après avoir été en arrière-plan (l'un des cas
-      // les plus fréquents de connexion coupée), on force aussi une resynchronisation
-      // immédiate plutôt que d'attendre le prochain cycle de 15 secondes.
+      // les plus fréquents de connexion coupée), on adopte aussi immédiatement la
+      // version du serveur plutôt que d'attendre le prochain cycle de 15 secondes.
       document.addEventListener('visibilitychange', () => {
-        if(document.visibilityState === 'visible' && cloudDocRef){
-          cloudDocRef.get().then(snap => {
-            if(!snap.exists) return;
-            const data = snap.data();
-            cloudApplyingRemote = true;
-            let anyChange = false;
-            CLOUD_SYNCED_KEYS.forEach(k => {
-              if(!Object.prototype.hasOwnProperty.call(data, k)) return;
-              const localRaw = _origGetItem(k);
-              const merged = mergedValueForKey(k, localRaw, data[k]);
-              if(merged === null) return;
-              const mergedStr = JSON.stringify(merged);
-              if(mergedStr !== localRaw){
-                _origSetItem(k, mergedStr);
-                anyChange = true;
-              }
-            });
-            cloudApplyingRemote = false;
-            if(anyChange) refreshAllViewsFromCloud();
-          }).catch(() => {});
-        }
+        if(document.visibilityState === 'visible') adoptServerState();
       });
+
+      // Piège classique sur mobile (surtout Safari iOS) : revenir sur la page via
+      // le bouton "retour" du téléphone peut réafficher une version figée en
+      // mémoire (bfcache) sans réellement recharger la page ni relancer le JS.
+      // "pageshow" avec persisted=true détecte précisément ce cas.
+      window.addEventListener('pageshow', (e) => {
+        if(e.persisted) adoptServerState();
+      });
+      // Filet de sécurité supplémentaire dès l'ouverture de l'appli sur le
+      // téléphone (ou n'importe quel appareil), au cas où la première connexion
+      // Firestore mettrait un instant à s'établir sur un réseau mobile plus lent.
+      setTimeout(adoptServerState, 3000);
 
       cloudLog('Connexion à Firestore initialisée.');
     }catch(e){
