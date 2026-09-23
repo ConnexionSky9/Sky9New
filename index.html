@@ -9441,9 +9441,11 @@
         return merged;
       }
 
+      let cloudPushInFlight = false;
       async function pushStateToCloud(){
         if(!cloudDocRef) return;
         cloudPushTimer = null; // le délai est écoulé : plus rien n'est "en attente d'envoi"
+        cloudPushInFlight = true; // l'envoi est en cours (jusqu'à la confirmation du serveur)
         try{
           const snap = await cloudDocRef.get();
           const remote = snap.exists ? (snap.data() || {}) : {};
@@ -9483,6 +9485,8 @@
           }catch(err2){
             cloudLog('Échec de l\'envoi de secours également :', err2);
           }
+        }finally{
+          cloudPushInFlight = false;
         }
       }
 
@@ -9551,7 +9555,7 @@
             if(typeof data._globalResyncRequestedAt === 'number' && data._globalResyncRequestedAt !== lastHandledGlobalResync){
               const isFirstSnapshotEver = (lastHandledGlobalResync === null);
               lastHandledGlobalResync = data._globalResyncRequestedAt;
-              if(!isFirstSnapshotEver){
+              if(!isFirstSnapshotEver && !cloudPushTimer && !cloudPushInFlight){
                 CLOUD_SYNCED_KEYS.forEach(k => {
                   if(!Object.prototype.hasOwnProperty.call(data, k)) return;
                   const localRaw = _origGetItem(k);
@@ -9614,7 +9618,11 @@
       // faire à l'instant.
       function adoptServerState(){
         if(!cloudDocRef) return;
-        if(cloudPushTimer) return; // un envoi local est en attente : on attend le prochain cycle
+        // Un envoi est programmé OU carrément en cours (en attente de confirmation
+        // du serveur) : dans les deux cas, on n'écrase surtout rien maintenant, sinon
+        // on risquerait de reprendre une version pas encore à jour du serveur par
+        // dessus une modification locale pas encore confirmée. On attend le prochain cycle.
+        if(cloudPushTimer || cloudPushInFlight) return;
         cloudDocRef.get().then(snap => {
           if(!snap.exists) return;
           lastSuccessfulSyncAt = Date.now();
