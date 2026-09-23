@@ -2301,6 +2301,7 @@
         <div class="save-status-bar">
           <span id="saveStatusText">Toutes les modifications sont enregistrées automatiquement.</span>
           <button type="button" id="saveAllSettingsBtn">💾 Enregistrer les modifications</button>
+          <button type="button" id="forceResyncBtn" style="margin-left:8px;">🔄 Forcer la resynchronisation</button>
         </div>
 
         <div class="requests-block">
@@ -3235,6 +3236,31 @@
   const saveAllSettingsBtn = document.getElementById('saveAllSettingsBtn');
   if(saveAllSettingsBtn){
     saveAllSettingsBtn.addEventListener('click', showSavedIndicator);
+  }
+
+  const forceResyncBtn = document.getElementById('forceResyncBtn');
+  if(forceResyncBtn){
+    forceResyncBtn.addEventListener('click', () => {
+      forceResyncBtn.disabled = true;
+      const originalText = forceResyncBtn.textContent;
+      forceResyncBtn.textContent = 'Resynchronisation...';
+      if(typeof window.forceFullResync === 'function'){
+        window.forceFullResync().then((ok) => {
+          forceResyncBtn.disabled = false;
+          forceResyncBtn.textContent = originalText;
+          if(typeof showToast === 'function'){
+            showToast(ok ? '✓ Resynchronisation terminée — toutes les données sont à jour.' : "Aucune donnée trouvée côté serveur pour l'instant.");
+          }
+        }).catch(() => {
+          forceResyncBtn.disabled = false;
+          forceResyncBtn.textContent = originalText;
+          if(typeof showToast === 'function') showToast('Échec de la resynchronisation — vérifie ta connexion internet.');
+        });
+      }else{
+        forceResyncBtn.disabled = false;
+        forceResyncBtn.textContent = originalText;
+      }
+    });
   }
 
   // Le grade "Direction" donne un accès complet (comme un compte Direction classique).
@@ -8277,14 +8303,16 @@
                 map.set(k, item);
               }else{
                 // Les deux côtés ont cet id : on garde la version réellement la plus
-                // récente (par horodatage _modifiedAt), jamais automatiquement la
-                // locale — sinon une copie simplement en retard sur cet appareil
-                // pouvait écraser une modification plus récente faite ailleurs
-                // (ex : une demande de rechargement validée sur un autre PC).
+                // récente (par horodatage _modifiedAt). En cas d'égalité (ou d'absence
+                // d'horodatage des deux côtés — données créées avant ce système), on
+                // privilégie désormais la version du SERVEUR (remote), pas la locale :
+                // sinon un appareil resté bloqué avec une vieille copie locale sans
+                // horodatage rechargeait indéfiniment cette même mauvaise version,
+                // même après un rafraîchissement complet de la page.
                 const existing = map.get(k);
                 const existingTs = (existing && typeof existing._modifiedAt === 'number') ? existing._modifiedAt : 0;
                 const itemTs = (item && typeof item._modifiedAt === 'number') ? item._modifiedAt : 0;
-                if(itemTs >= existingTs) map.set(k, item);
+                if(itemTs > existingTs) map.set(k, item);
               }
             });
             return order.map(k => map.get(k));
@@ -8392,17 +8420,88 @@
         });
       }
 
-      cloudDocRef.onSnapshot((snap) => {
-        if(snap.exists){
+      let cloudUnsubscribe = null;
+      let cloudReconnectAttempts = 0;
+
+      function attachCloudListener(){
+        if(cloudUnsubscribe){ try{ cloudUnsubscribe(); }catch(e){} }
+        cloudUnsubscribe = cloudDocRef.onSnapshot((snap) => {
+          cloudReconnectAttempts = 0; // la connexion fonctionne, on repart à zéro
+          if(snap.exists){
+            const data = snap.data();
+            cloudApplyingRemote = true;
+            let anyChange = false;
+            CLOUD_SYNCED_KEYS.forEach(k => {
+              if(!Object.prototype.hasOwnProperty.call(data, k)) return;
+              // Fusion (et non écrasement) même en réception : une donnée locale plus
+              // fraîche que ce que ce message reçu contient encore (ex: une photo tout
+              // juste ajoutée, pas encore reflétée par ce snapshot précis) ne doit
+              // jamais être effacée par cette mise à jour.
+              const localRaw = _origGetItem(k);
+              const merged = mergedValueForKey(k, localRaw, data[k]);
+              if(merged === null) return;
+              const mergedStr = JSON.stringify(merged);
+              if(mergedStr !== localRaw){
+                _origSetItem(k, mergedStr);
+                anyChange = true;
+              }
+            });
+            cloudApplyingRemote = false;
+            cloudReady = true;
+            if(anyChange) refreshAllViewsFromCloud();
+          }else{
+            // Aucune donnée en ligne pour l'instant : on envoie l'état local actuel
+            // pour amorcer la base (par exemple, tout premier lancement).
+            cloudReady = true;
+            pushStateToCloud();
+          }
+        }, (err) => {
+          cloudLog('Erreur de synchronisation (vérifie ta config Firebase et tes règles Firestore) :', err);
+          // Reconnexion automatique : un écouteur Firestore qui tombe en erreur
+          // (wifi coupé, mise en veille, onglet en arrière-plan longtemps...) ne se
+          // relance JAMAIS tout seul par défaut — c'est exactement ce qui pouvait
+          // bloquer un appareil avec des données figées jusqu'à un rafraîchissement
+          // manuel de la page. On le relance nous-mêmes, avec un délai croissant.
+          cloudReconnectAttempts++;
+          const delay = Math.min(30000, 1500 * cloudReconnectAttempts);
+          cloudLog(`Nouvelle tentative de connexion dans ${Math.round(delay/1000)}s...`);
+          setTimeout(attachCloudListener, delay);
+        });
+      }
+      attachCloudListener();
+
+      // Bouton "Forcer la resynchronisation" (Direction, Paramétrage) : corrige
+      // immédiatement un appareil resté bloqué, en prenant la version du SERVEUR
+      // comme vérité absolue (sans fusion), plutôt que d'attendre le prochain cycle.
+      window.forceFullResync = function(){
+        if(!cloudDocRef) return Promise.reject('Cloud non initialisé');
+        return cloudDocRef.get().then(snap => {
+          if(!snap.exists) return false;
+          const data = snap.data();
+          cloudApplyingRemote = true;
+          CLOUD_SYNCED_KEYS.forEach(k => {
+            if(!Object.prototype.hasOwnProperty.call(data, k)) return;
+            _origSetItem(k, data[k]);
+          });
+          cloudApplyingRemote = false;
+          refreshAllViewsFromCloud();
+          return true;
+        });
+      };
+
+      // Filet de sécurité supplémentaire : indépendamment de l'écouteur temps réel
+      // ci-dessus, on force une resynchronisation complète toutes les 15 secondes.
+      // Même si la reconnexion automatique avait un cas limite non couvert, aucun
+      // appareil ne peut donc rester durablement désynchronisé.
+      setInterval(() => {
+        if(!cloudDocRef) return;
+        cloudDocRef.get().then(snap => {
+          if(!snap.exists) return;
           const data = snap.data();
           cloudApplyingRemote = true;
           let anyChange = false;
           CLOUD_SYNCED_KEYS.forEach(k => {
             if(!Object.prototype.hasOwnProperty.call(data, k)) return;
-            // Fusion (et non écrasement) même en réception : une donnée locale plus
-            // fraîche que ce que ce message reçu contient encore (ex: une photo tout
-            // juste ajoutée, pas encore reflétée par ce snapshot précis) ne doit
-            // jamais être effacée par cette mise à jour.
             const localRaw = _origGetItem(k);
             const merged = mergedValueForKey(k, localRaw, data[k]);
             if(merged === null) return;
@@ -8413,16 +8512,35 @@
             }
           });
           cloudApplyingRemote = false;
-          cloudReady = true;
           if(anyChange) refreshAllViewsFromCloud();
-        }else{
-          // Aucune donnée en ligne pour l'instant : on envoie l'état local actuel
-          // pour amorcer la base (par exemple, tout premier lancement).
-          cloudReady = true;
-          pushStateToCloud();
+        }).catch(err => cloudLog('Échec de la resynchronisation périodique :', err));
+      }, 15000);
+
+      // Si l'onglet redevient visible après avoir été en arrière-plan (l'un des cas
+      // les plus fréquents de connexion coupée), on force aussi une resynchronisation
+      // immédiate plutôt que d'attendre le prochain cycle de 15 secondes.
+      document.addEventListener('visibilitychange', () => {
+        if(document.visibilityState === 'visible' && cloudDocRef){
+          cloudDocRef.get().then(snap => {
+            if(!snap.exists) return;
+            const data = snap.data();
+            cloudApplyingRemote = true;
+            let anyChange = false;
+            CLOUD_SYNCED_KEYS.forEach(k => {
+              if(!Object.prototype.hasOwnProperty.call(data, k)) return;
+              const localRaw = _origGetItem(k);
+              const merged = mergedValueForKey(k, localRaw, data[k]);
+              if(merged === null) return;
+              const mergedStr = JSON.stringify(merged);
+              if(mergedStr !== localRaw){
+                _origSetItem(k, mergedStr);
+                anyChange = true;
+              }
+            });
+            cloudApplyingRemote = false;
+            if(anyChange) refreshAllViewsFromCloud();
+          }).catch(() => {});
         }
-      }, (err) => {
-        cloudLog('Erreur de synchronisation (vérifie ta config Firebase et tes règles Firestore) :', err);
       });
 
       cloudLog('Connexion à Firestore initialisée.');
