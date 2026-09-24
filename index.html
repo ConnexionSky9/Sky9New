@@ -3550,12 +3550,11 @@
       exportBackupBtn.disabled = true;
       const original = exportBackupBtn.textContent;
       exportBackupBtn.textContent = 'Préparation...';
-      if(cloudDocRef){
-        cloudDocRef.get().then(snap => {
-          if(snap.exists){
+      if(cloudCollectionRef){
+        fetchAllRemote().then(remote => {
+          if(Object.keys(remote).length > 0){
             // On fusionne le local (jamais écrit nulle part) avec le serveur, juste
             // pour construire le fichier — aucune sauvegarde locale n'est modifiée.
-            const remote = snap.data();
             const backup = { exportedAt: new Date().toISOString(), source: 'serveur (Firestore)', data: {} };
             CLOUD_SYNCED_KEYS.forEach(k => {
               const raw = Object.prototype.hasOwnProperty.call(remote, k) ? remote[k] : localStorage.getItem(k);
@@ -9211,7 +9210,9 @@
   ];
 
   let cloudDb = null;
-  let cloudDocRef = null;
+  let cloudDocRef = null; // conservé pour compat (référence vers le doc "meta")
+  let cloudCollectionRef = null; // UN document Firestore PAR clé, au lieu d'un seul
+  let cloudMetaRef = null; // petit document séparé, pour le signal de resynchronisation globale
   let cloudApplyingRemote = false;
   let cloudPushTimer = null;
   let cloudReady = false;
@@ -9248,7 +9249,50 @@
     try{
       firebase.initializeApp(firebaseConfig);
       cloudDb = firebase.firestore();
-      cloudDocRef = cloudDb.collection('echonews').doc('state');
+      const oldSingleDocRef = cloudDb.collection('echonews').doc('state');
+      cloudCollectionRef = cloudDb.collection('echonews_data');
+      cloudMetaRef = cloudDb.collection('echonews').doc('meta');
+      cloudDocRef = cloudMetaRef; // rétro-compat pour les endroits qui ne font qu'un simple "ping"
+
+      // Lit toutes les clés depuis les documents séparés (un par clé), et reconstruit
+      // un objet {clé: valeurJSON} identique à ce que l'ancien document unique donnait.
+      async function fetchAllRemote(){
+        const snap = await cloudCollectionRef.get();
+        const result = {};
+        snap.forEach(doc => {
+          const d = doc.data();
+          if(d && typeof d.value === 'string') result[doc.id] = d.value;
+        });
+        return result;
+      }
+
+      // MIGRATION (une seule fois) : si l'ancien document unique contient encore des
+      // données mais que la nouvelle structure (un document par clé) est vide, on
+      // recopie tout, clé par clé, avant de continuer — aucune donnée existante
+      // n'est perdue dans ce changement de structure.
+      async function migrateOldSingleDocIfNeeded(){
+        try{
+          const existingSnap = await cloudCollectionRef.limit(1).get();
+          if(!existingSnap.empty) return; // déjà migré (ou déjà en cours d'utilisation)
+          const oldSnap = await oldSingleDocRef.get();
+          if(!oldSnap.exists) return; // rien à migrer (tout premier lancement)
+          const oldData = oldSnap.data() || {};
+          const batch = cloudDb.batch();
+          let count = 0;
+          CLOUD_SYNCED_KEYS.forEach(k => {
+            if(Object.prototype.hasOwnProperty.call(oldData, k) && typeof oldData[k] === 'string'){
+              batch.set(cloudCollectionRef.doc(k), { value: oldData[k], _updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+              count++;
+            }
+          });
+          if(count > 0){
+            await batch.commit();
+            cloudLog(`Migration effectuée : ${count} clé(s) recopiée(s) depuis l'ancien document unique vers la nouvelle structure (un document par clé), sans perte de données.`);
+          }
+        }catch(err){
+          cloudLog('Migration impossible (peut-être déjà faite, ou droits insuffisants) :', err);
+        }
+      }
 
       const _origSetItem = localStorage.setItem.bind(localStorage);
       const _origGetItem = localStorage.getItem.bind(localStorage);
@@ -9526,14 +9570,20 @@
 
       let cloudPushInFlight = false;
       async function pushStateToCloud(){
-        if(!cloudDocRef) return;
+        if(!cloudCollectionRef) return;
         cloudPushTimer = null; // le délai est écoulé : plus rien n'est "en attente d'envoi"
         cloudPushInFlight = true; // l'envoi est en cours (jusqu'à la confirmation du serveur)
         try{
-          const snap = await cloudDocRef.get();
-          const remote = snap.exists ? (snap.data() || {}) : {};
+          const remote = await fetchAllRemote();
           resolveMapTimestampsFirst(Object.prototype.hasOwnProperty.call(remote, 'echonews_map_timestamps') ? remote['echonews_map_timestamps'] : null);
-          const payload = {};
+          // Un document Firestore PAR CLÉ (au lieu d'un seul document partagé) : ainsi,
+          // une clé volumineuse (photos, justificatifs...) ne peut plus jamais faire
+          // échouer l'enregistrement de TOUTES les autres données en dépassant la
+          // limite de taille de Firestore (1 Mo par document). IMPORTANT : chaque
+          // clé est envoyée par une écriture INDÉPENDANTE, jamais groupée dans un
+          // même envoi "tout ou rien" — sinon une seule clé encore trop grosse
+          // bloquerait de nouveau TOUTES les autres en même temps qu'elle.
+          const writes = [];
           CLOUD_SYNCED_KEYS.forEach(k => {
             const localRaw = localStorage.getItem(k);
             const remoteRaw = Object.prototype.hasOwnProperty.call(remote, k) ? remote[k] : null;
@@ -9541,7 +9591,13 @@
             if(merged === null) return;
             const mergedStr = JSON.stringify(merged);
             if(mergedStr === undefined) return;
-            payload[k] = mergedStr;
+            if(!rawValuesEquivalent(mergedStr, remoteRaw)){
+              writes.push(
+                cloudCollectionRef.doc(k).set({ value: mergedStr, _updatedAt: firebase.firestore.FieldValue.serverTimestamp() })
+                  .then(() => ({ key: k, ok: true }))
+                  .catch(err => ({ key: k, ok: false, err }))
+              );
+            }
             if(!rawValuesEquivalent(mergedStr, localRaw)){
               // Répercute immédiatement la fusion dans ce navigateur (sans redéclencher un envoi).
               cloudApplyingRemote = true;
@@ -9549,22 +9605,30 @@
               cloudApplyingRemote = false;
             }
           });
-          payload._updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-          await cloudDocRef.set(payload, { merge: true });
-          cloudLog('Envoi réussi (' + Object.keys(payload).length + ' clé(s)).');
+          const results = await Promise.all(writes);
+          const okCount = results.filter(r => r.ok).length;
+          const failed = results.filter(r => !r.ok);
+          cloudLog('Envoi réussi (' + okCount + ' clé(s) modifiée(s)).');
+          if(failed.length){
+            failed.forEach(f => cloudLog(`Échec de l'envoi pour la clé "${f.key}" (les autres clés ont quand même été envoyées) :`, f.err));
+          }
         }catch(err){
           cloudLog('Erreur lors de la fusion/lecture, tentative d\'envoi direct de secours :', err);
           // Filet de sécurité : si la lecture/fusion a échoué (ex: hors-ligne, erreur
           // réseau), on envoie quand même les données locales telles quelles plutôt
-          // que de ne rien envoyer du tout et de perdre silencieusement l'action.
+          // que de ne rien envoyer du tout et de perdre silencieusement l'action —
+          // toujours clé par clé, indépendamment les unes des autres.
           try{
-            const fallbackPayload = {};
+            const fallbackWrites = [];
             CLOUD_SYNCED_KEYS.forEach(k => {
               const v = localStorage.getItem(k);
-              if(v !== null) fallbackPayload[k] = v;
+              if(v !== null){
+                fallbackWrites.push(
+                  cloudCollectionRef.doc(k).set({ value: v, _updatedAt: firebase.firestore.FieldValue.serverTimestamp() }).catch(() => {})
+                );
+              }
             });
-            fallbackPayload._updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-            await cloudDocRef.set(fallbackPayload, { merge: true });
+            await Promise.all(fallbackWrites);
             cloudLog('Envoi de secours réussi.');
           }catch(err2){
             cloudLog('Échec de l\'envoi de secours également :', err2);
@@ -9604,13 +9668,20 @@
       let lastHandledGlobalResync = null; // 'null' = pas encore vu de premier snapshot
       window.getLastSuccessfulSyncAt = () => lastSuccessfulSyncAt;
 
+      let cloudUnsubscribeMeta = null;
       function attachCloudListener(){
         if(cloudUnsubscribe){ try{ cloudUnsubscribe(); }catch(e){} }
-        cloudUnsubscribe = cloudDocRef.onSnapshot((snap) => {
+        if(cloudUnsubscribeMeta){ try{ cloudUnsubscribeMeta(); }catch(e){} }
+
+        cloudUnsubscribe = cloudCollectionRef.onSnapshot((querySnap) => {
           cloudReconnectAttempts = 0; // la connexion fonctionne, on repart à zéro
           lastSuccessfulSyncAt = Date.now();
-          if(snap.exists){
-            const data = snap.data();
+          if(!querySnap.empty){
+            const data = {};
+            querySnap.forEach(doc => {
+              const d = doc.data();
+              if(d && typeof d.value === 'string') data[doc.id] = d.value;
+            });
             cloudApplyingRemote = true;
             resolveMapTimestampsFirst(Object.prototype.hasOwnProperty.call(data, 'echonews_map_timestamps') ? data['echonews_map_timestamps'] : null);
             let anyChange = false;
@@ -9632,28 +9703,6 @@
             cloudApplyingRemote = false;
             cloudReady = true;
             if(anyChange) refreshAllViewsFromCloud();
-
-            // Signal "resynchroniser tout le monde" envoyé par la Direction depuis
-            // Site → Sauvegarde : chaque appareil qui le reçoit adopte immédiatement
-            // la version du serveur pour toutes les clés, sans attendre le prochain
-            // cycle de 2 secondes.
-            if(typeof data._globalResyncRequestedAt === 'number' && data._globalResyncRequestedAt !== lastHandledGlobalResync){
-              const isFirstSnapshotEver = (lastHandledGlobalResync === null);
-              lastHandledGlobalResync = data._globalResyncRequestedAt;
-              if(!isFirstSnapshotEver && !cloudPushTimer && !cloudPushInFlight){
-                CLOUD_SYNCED_KEYS.forEach(k => {
-                  if(!Object.prototype.hasOwnProperty.call(data, k)) return;
-                  const localRaw = _origGetItem(k);
-                  if(!rawValuesEquivalent(data[k], localRaw)){
-                    cloudApplyingRemote = true;
-                    _origSetItem(k, data[k]);
-                    cloudApplyingRemote = false;
-                  }
-                });
-                refreshAllViewsFromCloud();
-                if(typeof showToast === 'function') showToast('🔄 Resynchronisation demandée par la Direction — données à jour.');
-              }
-            }
           }else{
             // Aucune donnée en ligne pour l'instant : on envoie l'état local actuel
             // pour amorcer la base (par exemple, tout premier lancement).
@@ -9672,17 +9721,34 @@
           cloudLog(`Nouvelle tentative de connexion dans ${Math.round(delay/1000)}s...`);
           setTimeout(attachCloudListener, delay);
         });
+
+        // Signal "resynchroniser tout le monde" (Site → Sauvegarde) : un petit
+        // document séparé, distinct des données elles-mêmes, pour ne jamais
+        // risquer de faire grossir inutilement l'un des documents de données.
+        cloudUnsubscribeMeta = cloudMetaRef.onSnapshot((metaSnap) => {
+          if(!metaSnap.exists) return;
+          const meta = metaSnap.data() || {};
+          if(typeof meta._globalResyncRequestedAt === 'number' && meta._globalResyncRequestedAt !== lastHandledGlobalResync){
+            const isFirstSnapshotEver = (lastHandledGlobalResync === null);
+            lastHandledGlobalResync = meta._globalResyncRequestedAt;
+            if(!isFirstSnapshotEver && !cloudPushTimer && !cloudPushInFlight){
+              adoptServerState();
+              if(typeof showToast === 'function') showToast('🔄 Resynchronisation demandée par la Direction — données à jour.');
+            }
+          }
+        }, () => {});
       }
-      attachCloudListener();
+      migrateOldSingleDocIfNeeded().finally(() => {
+        attachCloudListener();
+      });
 
       // Bouton "Forcer la resynchronisation" (Direction, Paramétrage) : corrige
       // immédiatement un appareil resté bloqué, en prenant la version du SERVEUR
       // comme vérité absolue (sans fusion), plutôt que d'attendre le prochain cycle.
       window.forceFullResync = function(){
-        if(!cloudDocRef) return Promise.reject('Cloud non initialisé');
-        return cloudDocRef.get().then(snap => {
-          if(!snap.exists) return false;
-          const data = snap.data();
+        if(!cloudCollectionRef) return Promise.reject('Cloud non initialisé');
+        return fetchAllRemote().then(data => {
+          if(Object.keys(data).length === 0) return false;
           cloudApplyingRemote = true;
           CLOUD_SYNCED_KEYS.forEach(k => {
             if(!Object.prototype.hasOwnProperty.call(data, k)) return;
@@ -9702,16 +9768,14 @@
       // saute ce tour pour ne jamais écraser une action que l'utilisateur vient de
       // faire à l'instant.
       function adoptServerState(){
-        if(!cloudDocRef) return;
+        if(!cloudCollectionRef) return;
         // Un envoi est programmé OU carrément en cours (en attente de confirmation
         // du serveur) : dans les deux cas, on n'écrase surtout rien maintenant, sinon
         // on risquerait de reprendre une version pas encore à jour du serveur par
         // dessus une modification locale pas encore confirmée. On attend le prochain cycle.
         if(cloudPushTimer || cloudPushInFlight) return;
-        cloudDocRef.get().then(snap => {
-          if(!snap.exists) return;
+        fetchAllRemote().then(data => {
           lastSuccessfulSyncAt = Date.now();
-          const data = snap.data();
           cloudApplyingRemote = true;
           let anyChange = false;
           CLOUD_SYNCED_KEYS.forEach(k => {
