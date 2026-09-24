@@ -4916,6 +4916,40 @@
   // l'enregistrement continue de fonctionner. Les entrées récentes ne sont
   // jamais touchées.
   const PHOTO_RETENTION_DAYS = 21;
+
+  // ---------- Limite par NOMBRE de photos (la demande principale) ----------
+  // Dès qu'une nouvelle photo est ajoutée, si le nombre total de photos conservées
+  // dépasse la limite, la (ou les) plus ancienne(s) est/sont retirée(s) — la fiche
+  // elle-même (qui, quand, pour quelle entreprise) n'est jamais supprimée, seule
+  // l'image l'est. Fonctionne en plus du nettoyage par ancienneté ci-dessous.
+  const MAX_PHOTOS_PER_KEY = 30;
+  function enforcePhotoLimit_completedAds(map, justAddedOccId){
+    const withPhoto = Object.keys(map)
+      .filter(occId => map[occId] && map[occId].proof)
+      .sort((a, b) => (map[a].ts || 0) - (map[b].ts || 0)); // plus ancienne en premier
+    while(withPhoto.length > MAX_PHOTOS_PER_KEY){
+      const oldestOccId = withPhoto.shift();
+      if(oldestOccId === justAddedOccId) continue; // ne jamais retirer celle qu'on vient d'ajouter
+      map[oldestOccId].proof = null;
+    }
+  }
+  function enforcePhotoLimit_diffusionHistory(list, justAddedEntry){
+    const withPhoto = list.filter(h => h.proof).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    while(withPhoto.length > MAX_PHOTOS_PER_KEY){
+      const oldest = withPhoto.shift();
+      if(oldest === justAddedEntry) continue;
+      oldest.proof = null;
+    }
+  }
+
+  // ---------- Nettoyage des anciennes photos (limite de taille Firestore) ----------
+  // Firestore refuse d'enregistrer un document de plus de 1 Mo. Les photos de
+  // diffusion (justificatifs) s'accumulent avec le temps dans ces deux clés et
+  // finissent par dépasser cette limite. Ce nettoyage NE SUPPRIME AUCUNE DONNÉE
+  // (qui a coché quoi, quand, pour quelle entreprise reste intact pour toujours)
+  // — il retire uniquement la PHOTO elle-même des entrées anciennes, pour que
+  // l'enregistrement continue de fonctionner. Les entrées récentes ne sont
+  // jamais touchées.
   function pruneOldPhotoData(){
     const cutoff = Date.now() - PHOTO_RETENTION_DAYS * 24 * 60 * 60 * 1000;
     let changedCount = 0;
@@ -5555,10 +5589,15 @@
         const occId = zone.dataset.occProof;
         if(!occId || !map[occId]) return;
         map[occId].proof = reader.result;
+        enforcePhotoLimit_completedAds(map, occId);
         saveCompleted(map);
         const histList = loadEmpDiffusionHistory();
         const histEntry = histList.find(h => h.occId === occId);
-        if(histEntry){ histEntry.proof = reader.result; saveEmpDiffusionHistory(histList); }
+        if(histEntry){
+          histEntry.proof = reader.result;
+          enforcePhotoLimit_diffusionHistory(histList, histEntry);
+          saveEmpDiffusionHistory(histList);
+        }
         renderBroadcastPlanning();
       };
       reader.readAsDataURL(file);
