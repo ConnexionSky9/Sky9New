@@ -2713,6 +2713,7 @@
             <div class="kpi"><div class="label">Envoi en attente</div><div class="value" id="diagPendingPush" style="font-size:18px;">—</div></div>
           </div>
           <button class="ad-submit" id="runDiagnosticBtn">🩺 Lancer un diagnostic complet</button>
+          <button type="button" id="prunePhotosBtn" style="margin-left:8px;">🧹 Nettoyer les anciennes photos</button>
           <div id="diagnosticResult" style="margin-top:16px;"></div>
         </div>
         <div class="requests-block">
@@ -3684,6 +3685,17 @@
 
     if(typeof renderTickerBanner === 'function') renderTickerBanner();
     if(typeof injectCustomPagesIntoNav === 'function') injectCustomPagesIntoNav();
+
+    // Nettoyage automatique des anciennes photos (une fois par jour maximum,
+    // pour éviter de dépasser la limite de taille de Firestore sans jamais avoir
+    // à y penser manuellement). Ne retire jamais rien de récent.
+    try{
+      const lastPrune = parseInt(localStorage.getItem('echonews_last_photo_prune') || '0', 10);
+      if(Date.now() - lastPrune > 24 * 60 * 60 * 1000){
+        if(typeof pruneOldPhotoData === 'function') pruneOldPhotoData();
+        localStorage.setItem('echonews_last_photo_prune', String(Date.now()));
+      }
+    }catch(e){}
 
     tabEntreprises.classList.add('hidden-tab');
     tabEmployes.classList.add('hidden-tab');
@@ -4893,6 +4905,48 @@
   }
   function saveEmpDiffusionHistory(list){
     try{ localStorage.setItem(LS_EMP_DIFFUSION_HISTORY_KEY, JSON.stringify(list)); }catch(e){}
+  }
+
+  // ---------- Nettoyage des anciennes photos (limite de taille Firestore) ----------
+  // Firestore refuse d'enregistrer un document de plus de 1 Mo. Les photos de
+  // diffusion (justificatifs) s'accumulent avec le temps dans ces deux clés et
+  // finissent par dépasser cette limite. Ce nettoyage NE SUPPRIME AUCUNE DONNÉE
+  // (qui a coché quoi, quand, pour quelle entreprise reste intact pour toujours)
+  // — il retire uniquement la PHOTO elle-même des entrées anciennes, pour que
+  // l'enregistrement continue de fonctionner. Les entrées récentes ne sont
+  // jamais touchées.
+  const PHOTO_RETENTION_DAYS = 21;
+  function pruneOldPhotoData(){
+    const cutoff = Date.now() - PHOTO_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    let changedCount = 0;
+
+    // Historique permanent des diffusions : on garde la ligne, on retire juste
+    // la photo si elle est plus vieille que la période de conservation.
+    const history = loadEmpDiffusionHistory();
+    history.forEach(h => {
+      if(h.proof && typeof h.ts === 'number' && h.ts < cutoff){
+        h.proof = null;
+        changedCount++;
+      }
+    });
+    if(changedCount > 0) saveEmpDiffusionHistory(history);
+
+    // Carte des diffusions cochées (état courant du planning) : au-delà de la
+    // période de conservation, l'annonce n'a plus d'utilité dans cette carte
+    // (elle reste pour toujours dans l'historique ci-dessus) — on retire alors
+    // toute l'entrée pour ne garder ici que ce qui concerne le planning récent.
+    const completedMap = loadCompleted();
+    let removedFromMap = 0;
+    Object.keys(completedMap).forEach(occId => {
+      const entry = completedMap[occId];
+      if(entry && typeof entry.ts === 'number' && entry.ts < cutoff){
+        delete completedMap[occId];
+        removedFromMap++;
+      }
+    });
+    if(removedFromMap > 0) saveCompleted(completedMap);
+
+    return { photosStrippedFromHistory: changedCount, entriesRemovedFromPlanningMap: removedFromMap };
   }
   function logEmployeeDiffusion(entry){
     const list = loadEmpDiffusionHistory();
@@ -7611,6 +7665,22 @@
         });
       };
       doPing();
+    });
+  }
+
+  const prunePhotosBtn = document.getElementById('prunePhotosBtn');
+  if(prunePhotosBtn){
+    prunePhotosBtn.addEventListener('click', () => {
+      const ok = window.confirm(`Retirer les photos des diffusions de plus de ${PHOTO_RETENTION_DAYS} jours ? La fiche (qui, quand, pour quelle entreprise) reste conservée pour toujours — seule l'image est retirée, pour que l'enregistrement continue de fonctionner correctement (limite de taille du serveur).`);
+      if(!ok) return;
+      const result = pruneOldPhotoData();
+      const by = session ? session.name : 'Direction';
+      addLog(`La Direction (<b>${escapeHtml(by)}</b>) a nettoyé les anciennes photos de diffusion (${result.photosStrippedFromHistory} photo(s) retirée(s) de l'historique, ${result.entriesRemovedFromPlanningMap} entrée(s) ancienne(s) retirée(s) du planning courant).`);
+      const resultEl = document.getElementById('diagnosticResult');
+      if(resultEl){
+        resultEl.innerHTML = `<p style="color:var(--emerald); font-size:13px;">✓ Nettoyage terminé : ${result.photosStrippedFromHistory} photo(s) retirée(s) de l'historique (fiches conservées), ${result.entriesRemovedFromPlanningMap} entrée(s) ancienne(s) retirée(s) du planning courant.</p>`;
+      }
+      showSavedIndicator();
     });
   }
 
