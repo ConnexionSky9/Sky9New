@@ -665,6 +665,17 @@
   @media (prefers-reduced-motion: reduce){
     .ticker-track{ animation: none; }
   }
+  .rainbow-text{
+    background: linear-gradient(90deg, #ff3b3b, #ff9c33, #ffe83b, #4ade80, #33c9ff, #7c5cff, #ff3ba9, #ff3b3b);
+    background-size: 400% 100%;
+    -webkit-background-clip: text; background-clip: text; color: transparent !important;
+    animation: ticker-rainbow 4s linear infinite;
+  }
+  span.ticker-item.rainbow-text{ display:inline-block; }
+  @keyframes ticker-rainbow{
+    0%{ background-position: 0% 50%; }
+    100%{ background-position: 400% 50%; }
+  }
 
   /* ---------- Roue de la Fortune ---------- */
   .wheel-wrap{ position:relative; width:320px; max-width:100%; margin:0 auto 18px; }
@@ -687,6 +698,7 @@
     text-shadow: 0 1px 3px rgba(0,0,0,.7);
     max-width:88px; white-space:normal; line-height:1.15;
   }
+  .wheel-slice-label span.rainbow-text{ text-shadow: none; }
   .wheel-pointer{
     position:absolute; top:-14px; left:50%; transform:translateX(-50%);
     font-size:28px; color: var(--gold); z-index:2; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));
@@ -700,7 +712,7 @@
   .wheel-legend-item{ display:flex; align-items:center; gap:6px; font-size:12.5px; color: var(--text-dim); }
   .wheel-legend-swatch{ width:12px; height:12px; border-radius:3px; flex-shrink:0; }
   .wheel-segment-row{
-    display:grid; grid-template-columns: auto 1fr 90px 1fr 90px auto auto auto;
+    display:grid; grid-template-columns: auto 1fr 90px 1fr 90px auto auto auto auto;
     gap:8px; align-items:center; padding:8px; border:1px solid var(--line); border-radius:2px; margin-bottom:8px;
     background: var(--bg-raised);
   }
@@ -2425,6 +2437,7 @@
             </div>
           </div>
           <button class="ad-submit" id="tickerAddBtn" style="margin-bottom:16px;">Ajouter à la banderole</button>
+          <p style="font-size:12px; color:var(--text-faint); margin-bottom:8px;">Chaque message a sa propre couleur (ou son propre effet 🌈 arc-en-ciel), réglable directement à côté de lui ci-dessous.</p>
           <div id="tickerMessagesList"><p class="requests-empty">Aucun message dans la banderole pour le moment.</p></div>
         </div>
 
@@ -2668,6 +2681,19 @@
             <label for="wheelCfgRules">Règles d'utilisation affichées aux entreprises</label>
             <textarea id="wheelCfgRules" maxlength="400"></textarea>
           </div>
+
+          <p style="font-size:12px; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:10px;">Texte des étiquettes (sur la roue)</p>
+          <div class="field-pair" style="margin-bottom:14px;">
+            <div class="field">
+              <label for="wheelCfgTextRadius">Position (distance depuis le centre, en %)</label>
+              <input type="range" id="wheelCfgTextRadius" min="10" max="90" step="1">
+            </div>
+            <div class="field">
+              <label for="wheelCfgTextSize">Taille du texte (px)</label>
+              <input type="number" id="wheelCfgTextSize" min="8" max="24" step="1">
+            </div>
+          </div>
+          <p style="font-size:12.5px; color:var(--text-dim); margin:0 0 14px;">La couleur du texte se règle case par case, juste en dessous — chaque étiquette peut avoir sa propre couleur ou son propre effet arc-en-ciel.</p>
 
           <p style="font-size:12px; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:10px;">Cases de la roue</p>
           <div id="wheelSegmentsEditor"></div>
@@ -7090,9 +7116,17 @@
       return;
     }
     banner.style.display = 'block';
+    // Chaque message garde sa propre couleur (ou son propre effet arc-en-ciel),
+    // indépendamment des autres messages de la banderole.
+    const buildItem = (m) => {
+      const isRainbow = m.colorMode === 'rainbow';
+      const cls = isRainbow ? 'ticker-item rainbow-text' : 'ticker-item';
+      const styleAttr = isRainbow ? '' : ` style="color:${escapeHtml(m.color || '#1857a4')};"`;
+      return `<span class="${cls}"${styleAttr}>📣 ${escapeHtml(m.text)}</span>`;
+    };
     // On répète la série deux fois à la suite pour permettre une boucle
     // parfaitement continue (translateX de 0 à -50%, sans saut visible).
-    const oneRound = messages.map(m => `<span class="ticker-item">📣 ${escapeHtml(m.text)}</span>`).join('');
+    const oneRound = messages.map(buildItem).join('');
     track.innerHTML = oneRound + oneRound;
     // Vitesse proportionnelle à la longueur totale du texte, pour une lisibilité constante.
     const totalChars = messages.reduce((sum, m) => sum + m.text.length, 0);
@@ -7107,7 +7141,7 @@
       const text = input.value.trim();
       if(!text) return;
       const list = loadTickerMessages();
-      list.push({ id: 'tick_' + Date.now() + '_' + Math.random().toString(36).slice(2), text });
+      list.push({ id: 'tick_' + Date.now() + '_' + Math.random().toString(36).slice(2), text, colorMode: 'solid', color: '#1857a4' });
       saveTickerMessages(list);
       input.value = '';
       renderTickerMessagesList();
@@ -7125,10 +7159,38 @@
       : list.map(m => `
           <div class="account-row" data-id="${escapeHtml(m.id)}">
             <span class="aname">${escapeHtml(m.text)}</span>
+            <input type="color" class="ticker-msg-color" value="${m.color || '#1857a4'}" title="Couleur de ce message" ${m.colorMode === 'rainbow' ? 'disabled' : ''}>
+            <label style="display:flex; align-items:center; gap:4px; font-size:11px; color:var(--text-dim); cursor:pointer;">
+              <input type="checkbox" class="ticker-msg-rainbow" ${m.colorMode === 'rainbow' ? 'checked' : ''}> 🌈
+            </label>
             <button data-action="delete-ticker" data-id="${escapeHtml(m.id)}">Supprimer</button>
           </div>
         `).join('');
   }
+
+  (function setupTickerColorDelegation(){
+    const container = document.getElementById('tickerMessagesList');
+    if(!container || container.dataset.tickerColorDelegationReady) return;
+    container.dataset.tickerColorDelegationReady = '1';
+    container.addEventListener('input', (e) => {
+      const row = e.target.closest('.account-row');
+      if(!row) return;
+      const id = row.dataset.id;
+      const colorInput = row.querySelector('.ticker-msg-color');
+      const rainbowInput = row.querySelector('.ticker-msg-rainbow');
+      const list = loadTickerMessages();
+      const msg = list.find(m => m.id === id);
+      if(!msg) return;
+      if(e.target === colorInput) msg.color = colorInput.value;
+      if(e.target === rainbowInput){
+        msg.colorMode = rainbowInput.checked ? 'rainbow' : 'solid';
+        colorInput.disabled = rainbowInput.checked;
+      }
+      saveTickerMessages(list);
+      renderTickerBanner();
+      showSavedIndicator();
+    });
+  })();
 
   (function setupTickerDelegation(){
     const container = document.getElementById('tickerMessagesList');
@@ -7302,9 +7364,10 @@
     // IMPORTANT : le div d'étiquette part par défaut vers la droite (3h), alors que
     // conic-gradient part du haut (12h, 0deg) — d'où le décalage de -90deg ci-dessous,
     // sans quoi chaque texte tombait sur la case voisine au lieu de la sienne.
+    const textRadiusPct = (typeof cfg.textRadius === 'number') ? cfg.textRadius : 30;
     disc.innerHTML = slices.map(sl => `
       <div class="wheel-slice-label" style="transform: rotate(${sl.midDeg - 90}deg);">
-        <span>${escapeHtml(sl.seg.label)}</span>
+        <span class="${sl.seg.textColorMode === 'rainbow' ? 'rainbow-text' : ''}" style="margin-left:${textRadiusPct}%; font-size:${cfg.textSize || 12}px; ${sl.seg.textColorMode === 'rainbow' ? '' : `color:${sl.seg.textColor || '#ffffff'};`}">${escapeHtml(sl.seg.label)}</span>
       </div>
     `).join('');
 
@@ -7415,11 +7478,18 @@
     const cfg = loadWheelDraft();
     container.innerHTML = (cfg.segments || []).map((seg, i) => `
       <div class="wheel-segment-row" data-idx="${i}">
-        <input type="color" class="seg-color" value="${seg.color}">
+        <input type="color" class="seg-color" value="${seg.color}" title="Couleur de la case (fond)">
         <input type="text" class="seg-label" value="${escapeHtml(seg.label)}" placeholder="Nom de la case">
         <input type="number" class="seg-weight" value="${seg.weight}" min="0" max="100" step="1" placeholder="% de chance">
         <input type="text" class="seg-reward" value="${escapeHtml(seg.reward || '')}" placeholder="Récompense">
         <input type="text" class="seg-id" value="${escapeHtml(seg.id)}" style="display:none;">
+        <span style="display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text-dim);">
+          Texte :
+          <input type="color" class="seg-text-color" value="${seg.textColor || '#ffffff'}" title="Couleur du texte de cette case">
+          <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+            <input type="checkbox" class="seg-text-rainbow" ${seg.textColorMode === 'rainbow' ? 'checked' : ''}> 🌈
+          </label>
+        </span>
         <button type="button" class="seg-up" title="Monter">▲</button>
         <button type="button" class="seg-down" title="Descendre">▼</button>
         <button type="button" class="seg-remove" title="Supprimer">🗑️</button>
@@ -7449,7 +7519,9 @@
       color: row.querySelector('.seg-color').value,
       label: row.querySelector('.seg-label').value.trim() || 'Case',
       weight: Math.max(0, parseInt(row.querySelector('.seg-weight').value, 10) || 0),
-      reward: row.querySelector('.seg-reward').value.trim()
+      reward: row.querySelector('.seg-reward').value.trim(),
+      textColor: row.querySelector('.seg-text-color').value,
+      textColorMode: row.querySelector('.seg-text-rainbow').checked ? 'rainbow' : 'solid'
     }));
   }
 
@@ -7512,6 +7584,8 @@
     setVal('wheelCfgBeforeMsg', cfg.beforeMsg || '');
     setVal('wheelCfgAfterMsg', cfg.afterMsg || '');
     setVal('wheelCfgRules', cfg.rulesText || '');
+    setVal('wheelCfgTextRadius', (typeof cfg.textRadius === 'number') ? cfg.textRadius : 30);
+    setVal('wheelCfgTextSize', cfg.textSize || 12);
     renderWheelSegmentsEditor();
 
     const published = loadWheelPublished();
@@ -7565,7 +7639,7 @@
     });
   })();
 
-  ['wheelCfgEnabled','wheelCfgTitle','wheelCfgSize','wheelCfgDuration','wheelCfgCooldown','wheelCfgMaxSpins','wheelCfgEventStart','wheelCfgEventEnd','wheelCfgBeforeMsg','wheelCfgAfterMsg','wheelCfgRules'].forEach(id => {
+  ['wheelCfgEnabled','wheelCfgTitle','wheelCfgSize','wheelCfgDuration','wheelCfgCooldown','wheelCfgMaxSpins','wheelCfgEventStart','wheelCfgEventEnd','wheelCfgBeforeMsg','wheelCfgAfterMsg','wheelCfgRules','wheelCfgTextRadius','wheelCfgTextSize'].forEach(id => {
     const el = document.getElementById(id);
     if(el){
       el.addEventListener('change', () => {
@@ -7581,6 +7655,8 @@
         cfg.beforeMsg = document.getElementById('wheelCfgBeforeMsg').value;
         cfg.afterMsg = document.getElementById('wheelCfgAfterMsg').value;
         cfg.rulesText = document.getElementById('wheelCfgRules').value;
+        cfg.textRadius = parseInt(document.getElementById('wheelCfgTextRadius').value, 10) || 30;
+        cfg.textSize = parseInt(document.getElementById('wheelCfgTextSize').value, 10) || 12;
         saveWheelDraft(cfg);
       });
     }
