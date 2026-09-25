@@ -889,6 +889,12 @@
     background: var(--line); border: 1px solid var(--line); margin-bottom: 28px;
   }
   .kpi{ background: var(--bg-card); padding: 18px 20px; position:relative; overflow:hidden; }
+  .fin-reset-btn, .fin-add-laundering-btn{
+    display:block; margin-top:10px; font-family:'IBM Plex Mono', monospace; font-size:10.5px;
+    background:transparent; border:1px solid var(--line); color: var(--text-dim);
+    padding:5px 9px; cursor:pointer; border-radius:4px;
+  }
+  .fin-reset-btn:hover, .fin-add-laundering-btn:hover{ border-color: var(--gold); color: var(--gold); }
   .kpi::before{ content:''; position:absolute; top:0; left:0; right:0; height:3px; background: var(--accent-grad); opacity:0; transition: opacity .2s ease; }
   .kpi:hover::before{ opacity:1; }
   .kpi .label{ font-family:'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--text-faint); text-transform:uppercase; letter-spacing:0.4px; }
@@ -2137,6 +2143,52 @@
       </nav>
 
       <div class="subpanel active" id="dirOverview">
+        <div class="requests-block" id="financialIndicatorsBlock">
+          <h2>Indicateurs financiers</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Calculés automatiquement à partir des données enregistrées — se mettent à jour tout seuls, rien à calculer à la main.</p>
+          <div class="kpi-row">
+            <div class="kpi">
+              <div class="label">Chiffre d'affaires</div>
+              <div class="value" id="kpiCA">$0</div>
+              <div class="sub" id="kpiCASub">depuis la dernière réinitialisation</div>
+              <button type="button" class="fin-reset-btn hidden-tab" data-indicator="ca">🔄 Réinitialiser</button>
+            </div>
+            <div class="kpi">
+              <div class="label">Dépenses de la semaine</div>
+              <div class="value" id="kpiExpensesOverview">$0</div>
+              <div class="sub" id="kpiExpensesOverviewSub">semaine en cours</div>
+              <button type="button" class="fin-reset-btn hidden-tab" data-indicator="expenses">🔄 Réinitialiser</button>
+            </div>
+            <div class="kpi">
+              <div class="label">Salaire total (entreprise)</div>
+              <div class="value" id="kpiSalaryTotal">$0</div>
+              <div class="sub" id="kpiSalaryTotalSub">depuis la dernière réinitialisation</div>
+              <button type="button" class="fin-reset-btn hidden-tab" data-indicator="salary">🔄 Réinitialiser</button>
+            </div>
+            <div class="kpi">
+              <div class="label">Blanchiment</div>
+              <div class="value" id="kpiLaundering">$0</div>
+              <div class="sub" id="kpiLaunderingSub">depuis la dernière réinitialisation</div>
+              <button type="button" class="fin-reset-btn hidden-tab" data-indicator="laundering">🔄 Réinitialiser</button>
+              <button type="button" class="fin-add-laundering-btn hidden-tab" style="margin-top:6px;">+ Ajouter un montant</button>
+            </div>
+          </div>
+          <div id="launderingAddForm" style="display:none; margin-top:14px;">
+            <div class="field-pair">
+              <div class="field">
+                <label for="launderingAmountInput">Montant ($)</label>
+                <input type="number" id="launderingAmountInput" min="0" step="1" placeholder="0">
+              </div>
+              <div class="field">
+                <label for="launderingNoteInput">Note (optionnelle)</label>
+                <input type="text" id="launderingNoteInput" maxlength="100" placeholder="Ex : opération du 24/09">
+              </div>
+            </div>
+            <button type="button" class="ad-submit" id="launderingAddConfirmBtn">Ajouter</button>
+            <button type="button" class="ad-reset" id="launderingAddCancelBtn">Annuler</button>
+          </div>
+        </div>
+
         <div class="kpi-row">
           <div class="kpi">
             <div class="label">Revenu pub / semaine</div>
@@ -3738,6 +3790,7 @@
       document.querySelectorAll('.dir-categories .dir-cat').forEach(b => b.classList.remove('hidden-tab'));
       const tabSiteAdmin = document.getElementById('tabBtnSiteAdmin');
       if(tabSiteAdmin) tabSiteAdmin.classList.remove('hidden-tab');
+      document.querySelectorAll('.fin-reset-btn, .fin-add-laundering-btn').forEach(b => b.classList.remove('hidden-tab'));
       sessionLabel.textContent = session.name + ' (direction)';
       document.getElementById('companyTagName').textContent = session.name;
       document.getElementById('empSessionName').textContent = session.name;
@@ -3835,7 +3888,7 @@
   const planningNextBtn = document.getElementById('planningNextBtn');
   const planningTodayBtn = document.getElementById('planningTodayBtn');
   if(planningPrevBtn) planningPrevBtn.addEventListener('click', () => {
-    if(planningDayOffset > 0){ planningDayOffset -= 1; renderBroadcastPlanning(); }
+    if(planningDayOffset > -PLANNING_HISTORY_RETENTION_DAYS){ planningDayOffset -= 1; renderBroadcastPlanning(); }
   });
   if(planningNextBtn) planningNextBtn.addEventListener('click', () => {
     planningDayOffset += 1; renderBroadcastPlanning();
@@ -4965,15 +5018,17 @@
     });
     if(changedCount > 0) saveEmpDiffusionHistory(history);
 
-    // Carte des diffusions cochées (état courant du planning) : au-delà de la
-    // période de conservation, l'annonce n'a plus d'utilité dans cette carte
-    // (elle reste pour toujours dans l'historique ci-dessus) — on retire alors
-    // toute l'entrée pour ne garder ici que ce qui concerne le planning récent.
+    // Carte des diffusions cochées (état courant du planning) : elle correspond
+    // exactement à ce que le planning employé permet de consulter en arrière
+    // (voir PLANNING_HISTORY_RETENTION_DAYS, 7 jours) — au-delà, une entrée
+    // n'a plus d'utilité ici puisqu'elle ne peut de toute façon plus être
+    // affichée, et elle reste pour toujours conservée dans l'historique ci-dessus.
+    const planningCutoff = Date.now() - PLANNING_HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000;
     const completedMap = loadCompleted();
     let removedFromMap = 0;
     Object.keys(completedMap).forEach(occId => {
       const entry = completedMap[occId];
-      if(entry && typeof entry.ts === 'number' && entry.ts < cutoff){
+      if(entry && typeof entry.ts === 'number' && entry.ts < planningCutoff){
         delete completedMap[occId];
         removedFromMap++;
       }
@@ -5245,6 +5300,7 @@
   }
 
   let planningDayOffset = 0;
+  const PLANNING_HISTORY_RETENTION_DAYS = 7; // on peut consulter jusqu'à 7 jours en arrière
   let planningFocusOccId = null;
   function addDaysToISO(dateStr, days){
     const d = new Date(dateStr + 'T00:00:00');
@@ -5257,7 +5313,7 @@
     const savedScrollTop = container ? container.scrollTop : 0;
     const prevBtn = document.getElementById('planningPrevBtn');
     const todayBtn = document.getElementById('planningTodayBtn');
-    if(prevBtn) prevBtn.disabled = planningDayOffset <= 0;
+    if(prevBtn) prevBtn.disabled = planningDayOffset <= -PLANNING_HISTORY_RETENTION_DAYS;
     if(todayBtn) todayBtn.disabled = planningDayOffset === 0;
 
     const viewedDayEarly = addDaysToISO(getBroadcastDay(), planningDayOffset);
@@ -8538,6 +8594,136 @@
   // (L'ancien système de facturation automatique basé sur les annonces acceptées
   // a été retiré : seule la facturation manuelle est utilisée désormais.)
 
+  /* ================================================================
+     INDICATEURS FINANCIERS (Vue d'ensemble) : chiffre d'affaires, dépenses
+     de la semaine, salaire total et blanchiment — calculés automatiquement,
+     chacun réinitialisable indépendamment depuis le panel Direction.
+     ================================================================ */
+  const LS_LAUNDERING_KEY = 'echonews_laundering_entries';
+  function loadLaunderingEntries(){
+    try{
+      const raw = localStorage.getItem(LS_LAUNDERING_KEY);
+      return raw ? JSON.parse(raw) : [];
+    }catch(e){ return []; }
+  }
+  function saveLaunderingEntries(list){
+    try{ localStorage.setItem(LS_LAUNDERING_KEY, JSON.stringify(list)); }catch(e){}
+  }
+
+  const FIN_RESET_KEYS = {
+    ca: 'echonews_fin_reset_ca',
+    expenses: 'echonews_fin_reset_expenses',
+    salary: 'echonews_fin_reset_salary',
+    laundering: 'echonews_fin_reset_laundering'
+  };
+  function loadFinResetMarker(indicator){
+    try{
+      const raw = localStorage.getItem(FIN_RESET_KEYS[indicator]);
+      return raw ? parseInt(raw, 10) : 0;
+    }catch(e){ return 0; }
+  }
+  function saveFinResetMarker(indicator, ts){
+    try{ localStorage.setItem(FIN_RESET_KEYS[indicator], String(ts)); }catch(e){}
+  }
+
+  // Calcule les 4 indicateurs d'un coup, chacun uniquement à partir des données
+  // dont l'horodatage est postérieur à SA PROPRE dernière réinitialisation —
+  // totalement indépendants les uns des autres.
+  function computeFinancialIndicators(){
+    const caMarker = loadFinResetMarker('ca');
+    const ca = loadPayments()
+      .filter(p => p.ts >= caMarker)
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    const expensesMarker = loadFinResetMarker('expenses');
+    const weekRange = getWeekRange();
+    const expensesEntries = loadExpenses().filter(e =>
+      e.ts >= weekRange.start.getTime() && e.ts <= weekRange.end.getTime() && e.ts >= expensesMarker
+    );
+    const expenses = expensesEntries.reduce((sum, e) => sum + e.amount, 0);
+
+    const salaryMarker = loadFinResetMarker('salary');
+    const salary = loadSalaryLedger()
+      .filter(l => l.ts >= salaryMarker)
+      .reduce((sum, l) => sum + l.amount, 0);
+
+    const launderingMarker = loadFinResetMarker('laundering');
+    const laundering = loadLaunderingEntries()
+      .filter(l => l.ts >= launderingMarker)
+      .reduce((sum, l) => sum + l.amount, 0);
+
+    return { ca, expenses, salary, laundering };
+  }
+
+  function renderFinancialIndicators(){
+    const vals = computeFinancialIndicators();
+    const setVal = (id, amount) => { const el = document.getElementById(id); if(el) el.textContent = formatUSD(amount); };
+    setVal('kpiCA', vals.ca);
+    setVal('kpiExpensesOverview', vals.expenses);
+    setVal('kpiSalaryTotal', vals.salary);
+    setVal('kpiLaundering', vals.laundering);
+  }
+
+  const FIN_INDICATOR_LABELS = {
+    ca: "le chiffre d'affaires",
+    expenses: 'les dépenses de la semaine',
+    salary: 'le salaire total',
+    laundering: 'le blanchiment'
+  };
+  (function setupFinancialIndicatorsDelegation(){
+    const container = document.getElementById('financialIndicatorsBlock');
+    if(!container || container.dataset.finDelegationReady) return;
+    container.dataset.finDelegationReady = '1';
+
+    container.addEventListener('click', (e) => {
+      const resetBtn = e.target.closest('.fin-reset-btn');
+      if(resetBtn){
+        const indicator = resetBtn.dataset.indicator;
+        const label = FIN_INDICATOR_LABELS[indicator] || indicator;
+        const ok = window.confirm(`Réinitialiser ${label} à zéro ? Cette action est immédiate. Les données déjà enregistrées ne sont pas supprimées (rien n'est perdu ailleurs dans l'application) — seul ce compteur repart de zéro et recommence à calculer à partir de maintenant.`);
+        if(!ok) return;
+        saveFinResetMarker(indicator, Date.now());
+        const by = session ? session.name : 'Direction';
+        addLog(`La Direction (<b>${escapeHtml(by)}</b>) a réinitialisé l'indicateur « ${escapeHtml(label)} ».`);
+        if(typeof logEventAudit === 'function') logEventAudit('fin_indicator_reset', `Indicateur "${indicator}" réinitialisé par ${by}.`);
+        renderFinancialIndicators();
+        showSavedIndicator();
+        return;
+      }
+      if(e.target.closest('.fin-add-laundering-btn')){
+        const form = document.getElementById('launderingAddForm');
+        if(form) form.style.display = form.style.display === 'none' ? 'block' : 'none';
+        return;
+      }
+    });
+  })();
+
+  const launderingAddConfirmBtn = document.getElementById('launderingAddConfirmBtn');
+  if(launderingAddConfirmBtn){
+    launderingAddConfirmBtn.addEventListener('click', () => {
+      const amountInput = document.getElementById('launderingAmountInput');
+      const noteInput = document.getElementById('launderingNoteInput');
+      const amount = parseFloat(amountInput.value);
+      if(isNaN(amount) || amount <= 0){ amountInput.focus(); return; }
+      const by = session ? session.name : 'Direction';
+      const list = loadLaunderingEntries();
+      list.unshift({ id: 'ldr_' + Date.now(), amount, note: noteInput.value.trim(), ts: Date.now(), by });
+      saveLaunderingEntries(list);
+      addLog(`La Direction (<b>${escapeHtml(by)}</b>) a ajouté ${formatUSD(amount)} au blanchiment${noteInput.value.trim() ? ' (' + escapeHtml(noteInput.value.trim()) + ')' : ''}.`);
+      amountInput.value = '';
+      noteInput.value = '';
+      document.getElementById('launderingAddForm').style.display = 'none';
+      renderFinancialIndicators();
+      showSavedIndicator();
+    });
+  }
+  const launderingAddCancelBtn = document.getElementById('launderingAddCancelBtn');
+  if(launderingAddCancelBtn){
+    launderingAddCancelBtn.addEventListener('click', () => {
+      document.getElementById('launderingAddForm').style.display = 'none';
+    });
+  }
+
   /* ---------- Historique permanent employé ---------- */
   const HISTORY_TYPE_LABELS = {
     ad_request: "Demande d'annonce envoyée",
@@ -9042,6 +9228,7 @@
   }
 
   function renderOverviewStats(){
+    renderFinancialIndicators();
     const totalEl = document.getElementById('kpiTotalDiffused');
     const top3El = document.getElementById('top3List');
     const revenueEl = document.getElementById('kpiWeeklyRevenue');
@@ -9315,7 +9502,8 @@
     'echonews_chats', 'echonews_ticker_messages',
     'echonews_wheel_config', 'echonews_wheel_config_published', 'echonews_wheel_spins',
     'echonews_event_audit_log', 'echonews_map_timestamps', 'echonews_custom_theme', 'echonews_maintenance_mode',
-    'echonews_custom_pages'
+    'echonews_custom_pages', 'echonews_laundering_entries',
+    'echonews_fin_reset_ca', 'echonews_fin_reset_expenses', 'echonews_fin_reset_salary', 'echonews_fin_reset_laundering'
   ];
 
   let cloudDb = null;
@@ -9759,7 +9947,7 @@
           'applyEmployeeDirectionAccess', 'renderRechargeRecap',
           'renderEntChatThread', 'renderDirChatThread', 'checkForNewChatMessages', 'renderTickerBanner',
           'renderWheelPlay', 'renderWheelAdminForm',
-          'renderEventStats', 'renderEventAudit', 'applyCustomTheme', 'injectCustomPagesIntoNav'
+          'renderEventStats', 'renderEventAudit', 'applyCustomTheme', 'injectCustomPagesIntoNav', 'renderFinancialIndicators'
           // 'applySession' retiré volontairement : il forçait un retour sur l'onglet
           // principal du rôle et un scroll en haut de page à CHAQUE synchronisation
           // cloud (y compris pour ses propres actions), ce qui donnait l'impression
