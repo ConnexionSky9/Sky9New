@@ -901,12 +901,12 @@
     background: var(--line); border: 1px solid var(--line); margin-bottom: 28px;
   }
   .kpi{ background: var(--bg-card); padding: 18px 20px; position:relative; overflow:hidden; }
-  .fin-reset-btn, .fin-add-laundering-btn{
+  .fin-reset-btn, .fin-adjust-btn{
     display:block; margin-top:10px; font-family:'IBM Plex Mono', monospace; font-size:10.5px;
     background:transparent; border:1px solid var(--line); color: var(--text-dim);
     padding:5px 9px; cursor:pointer; border-radius:4px;
   }
-  .fin-reset-btn:hover, .fin-add-laundering-btn:hover{ border-color: var(--gold); color: var(--gold); }
+  .fin-reset-btn:hover, .fin-adjust-btn:hover{ border-color: var(--gold); color: var(--gold); }
   .kpi::before{ content:''; position:absolute; top:0; left:0; right:0; height:3px; background: var(--accent-grad); opacity:0; transition: opacity .2s ease; }
   .kpi:hover::before{ opacity:1; }
   .kpi .label{ font-family:'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--text-faint); text-transform:uppercase; letter-spacing:0.4px; }
@@ -2164,40 +2164,48 @@
               <div class="value" id="kpiCA">$0</div>
               <div class="sub" id="kpiCASub">depuis la dernière réinitialisation</div>
               <button type="button" class="fin-reset-btn hidden-tab" data-indicator="ca">🔄 Réinitialiser</button>
+              <button type="button" class="fin-adjust-btn hidden-tab" data-indicator="ca">✏️ Ajuster</button>
             </div>
             <div class="kpi">
               <div class="label">Dépenses de la semaine</div>
               <div class="value" id="kpiExpensesOverview">$0</div>
               <div class="sub" id="kpiExpensesOverviewSub">semaine en cours</div>
               <button type="button" class="fin-reset-btn hidden-tab" data-indicator="expenses">🔄 Réinitialiser</button>
+              <button type="button" class="fin-adjust-btn hidden-tab" data-indicator="expenses">✏️ Ajuster</button>
             </div>
             <div class="kpi">
               <div class="label">Salaire total (entreprise)</div>
               <div class="value" id="kpiSalaryTotal">$0</div>
               <div class="sub" id="kpiSalaryTotalSub">depuis la dernière réinitialisation</div>
               <button type="button" class="fin-reset-btn hidden-tab" data-indicator="salary">🔄 Réinitialiser</button>
+              <button type="button" class="fin-adjust-btn hidden-tab" data-indicator="salary">✏️ Ajuster</button>
             </div>
             <div class="kpi">
               <div class="label">Blanchiment</div>
               <div class="value" id="kpiLaundering">$0</div>
               <div class="sub" id="kpiLaunderingSub">depuis la dernière réinitialisation</div>
               <button type="button" class="fin-reset-btn hidden-tab" data-indicator="laundering">🔄 Réinitialiser</button>
-              <button type="button" class="fin-add-laundering-btn hidden-tab" style="margin-top:6px;">+ Ajouter un montant</button>
+              <button type="button" class="fin-adjust-btn hidden-tab" data-indicator="laundering">✏️ Ajuster</button>
             </div>
           </div>
-          <div id="launderingAddForm" style="display:none; margin-top:14px;">
+
+          <div id="finAdjustForm" style="display:none; margin-top:14px;">
+            <p id="finAdjustFormTitle" style="font-size:13px; font-weight:600; margin-bottom:10px;"></p>
             <div class="field-pair">
               <div class="field">
-                <label for="launderingAmountInput">Montant ($)</label>
-                <input type="number" id="launderingAmountInput" min="0" step="1" placeholder="0">
+                <label for="finAdjustAmountInput">Montant ($) — négatif pour retirer, ex : -500</label>
+                <input type="number" id="finAdjustAmountInput" step="1" placeholder="0">
               </div>
               <div class="field">
-                <label for="launderingNoteInput">Note (optionnelle)</label>
-                <input type="text" id="launderingNoteInput" maxlength="100" placeholder="Ex : opération du 24/09">
+                <label for="finAdjustNoteInput">Note (optionnelle)</label>
+                <input type="text" id="finAdjustNoteInput" maxlength="100" placeholder="Ex : correction erreur du 24/09">
               </div>
             </div>
-            <button type="button" class="ad-submit" id="launderingAddConfirmBtn">Ajouter</button>
-            <button type="button" class="ad-reset" id="launderingAddCancelBtn">Annuler</button>
+            <div style="display:flex; gap:12px; flex-wrap:wrap;">
+              <button type="button" class="ad-submit" id="finAdjustConfirmBtn">Valider</button>
+              <button type="button" class="ad-reset" id="finAdjustCancelBtn">Annuler</button>
+            </div>
+            <div id="finAdjustHistory" style="margin-top:16px;"></div>
           </div>
         </div>
 
@@ -3779,6 +3787,14 @@
     tabEmployes.classList.add('hidden-tab');
     tabDirection.classList.add('hidden-tab');
     tabParticulier.classList.add('hidden-tab');
+    // Remis à caché à CHAQUE application de session (pas seulement au chargement
+    // de la page) : sans ça, un compte Direction qui se déconnecte pour laisser
+    // place à un autre rôle (sur le même appareil, sans recharger la page)
+    // laissait ces éléments visibles pour le rôle suivant, alors qu'ils ne
+    // doivent JAMAIS l'être pour personne d'autre que Direction.
+    const tabSiteAdminReset = document.getElementById('tabBtnSiteAdmin');
+    if(tabSiteAdminReset) tabSiteAdminReset.classList.add('hidden-tab');
+    document.querySelectorAll('.fin-reset-btn, .fin-adjust-btn').forEach(b => b.classList.add('hidden-tab'));
     if(tutorialBtn) tutorialBtn.classList.toggle('show', session.role === 'entreprise');
     if(tutorialBtnEmploye) tutorialBtnEmploye.classList.toggle('show', session.role === 'employe' || session.role === 'direction');
     if(tutorialBtnParticulier) tutorialBtnParticulier.classList.toggle('show', session.role === 'particulier');
@@ -3816,7 +3832,7 @@
       document.querySelectorAll('.dir-categories .dir-cat').forEach(b => b.classList.remove('hidden-tab'));
       const tabSiteAdmin = document.getElementById('tabBtnSiteAdmin');
       if(tabSiteAdmin) tabSiteAdmin.classList.remove('hidden-tab');
-      document.querySelectorAll('.fin-reset-btn, .fin-add-laundering-btn').forEach(b => b.classList.remove('hidden-tab'));
+      document.querySelectorAll('.fin-reset-btn, .fin-adjust-btn').forEach(b => b.classList.remove('hidden-tab'));
       sessionLabel.textContent = session.name + ' (direction)';
       document.getElementById('companyTagName').textContent = session.name;
       document.getElementById('empSessionName').textContent = session.name;
@@ -4896,6 +4912,11 @@
 
     // Le montant validé compte immédiatement dans le Revenu / semaine et l'Impôt
     // (comme une facturation manuelle, mais automatique à l'acceptation).
+    // IMPORTANT : seul un rechargement est payant (c'est lui qui fait rentrer de
+    // l'argent) — une demande d'annonce est gratuite, elle consomme juste le
+    // solde déjà payé. On enregistre quand même la ligne pour l'historique/la
+    // facturation, mais "isRecharge" permet au Chiffre d'affaires de ne compter
+    // que ce qui est réellement payant.
     const payments = loadPayments();
     payments.unshift({
       id: 'pay_' + Date.now(),
@@ -4906,6 +4927,7 @@
       requestIds: [list[idx].id],
       removedAdjustments: [],
       manual: false,
+      isRecharge: !!list[idx].isRecharge,
       label: list[idx].isRecharge ? 'Rechargement de solde' : 'Demande d\'annonce validée'
     });
     savePayments(payments);
@@ -8650,10 +8672,14 @@
     const range = getWeekRange();
     const revenueMarker = loadRevenueResetMarker();
     // On ne compte QUE les paiements validés (cochés comme payés en Facturation),
-    // jamais les annonces simplement acceptées mais pas encore payées.
+    // jamais les annonces simplement acceptées mais pas encore payées. Et parmi
+    // ceux-ci, seuls les rechargements sont payants (une demande d'annonce est
+    // gratuite, elle consomme juste un solde déjà payé) — donc elle ne doit
+    // jamais compter comme un revenu supplémentaire.
     const payments = loadPayments().filter(p =>
       p.ts >= range.start.getTime() && p.ts <= range.end.getTime() &&
-      (!revenueMarker || p.ts >= revenueMarker)
+      (!revenueMarker || p.ts >= revenueMarker) &&
+      (p.manual || p.isRecharge === true || (p.isRecharge === undefined && /rechargement/i.test(p.label || '')))
     );
     const adsCa = payments.reduce((sum, p) => sum + p.amount, 0);
 
@@ -8705,23 +8731,46 @@
   // Calcule les 4 indicateurs d'un coup, chacun uniquement à partir des données
   // dont l'horodatage est postérieur à SA PROPRE dernière réinitialisation —
   // totalement indépendants les uns des autres.
+  const LS_FIN_ADJUSTMENTS_KEY = 'echonews_fin_adjustments';
+  function loadFinAdjustments(){
+    try{
+      const raw = localStorage.getItem(LS_FIN_ADJUSTMENTS_KEY);
+      return raw ? JSON.parse(raw) : { ca: [], expenses: [], salary: [] };
+    }catch(e){ return { ca: [], expenses: [], salary: [] }; }
+  }
+  function saveFinAdjustments(all){
+    try{ localStorage.setItem(LS_FIN_ADJUSTMENTS_KEY, JSON.stringify(all)); }catch(e){}
+  }
+  // Somme des ajustements manuels d'un indicateur, seulement ceux faits depuis
+  // sa dernière réinitialisation (comme pour le reste de l'indicateur).
+  function sumFinAdjustments(indicator, sinceMarker){
+    const all = loadFinAdjustments();
+    return (all[indicator] || []).filter(a => a.ts >= sinceMarker).reduce((sum, a) => sum + a.amount, 0);
+  }
+
   function computeFinancialIndicators(){
     const caMarker = loadFinResetMarker('ca');
+    // Seuls les rechargements sont payants (les demandes d'annonce sont gratuites,
+    // elles consomment juste un solde déjà payé) — donc seul un rechargement
+    // accepté, ou une facturation manuelle, doit compter dans le chiffre
+    // d'affaires. "isRecharge === undefined" couvre les paiements enregistrés
+    // avant l'ajout de ce champ : on se fie alors au libellé.
     const ca = loadPayments()
       .filter(p => p.ts >= caMarker)
-      .reduce((sum, p) => sum + p.amount, 0);
+      .filter(p => p.manual || p.isRecharge === true || (p.isRecharge === undefined && /rechargement/i.test(p.label || '')))
+      .reduce((sum, p) => sum + p.amount, 0) + sumFinAdjustments('ca', caMarker);
 
     const expensesMarker = loadFinResetMarker('expenses');
     const weekRange = getWeekRange();
     const expensesEntries = loadExpenses().filter(e =>
       e.ts >= weekRange.start.getTime() && e.ts <= weekRange.end.getTime() && e.ts >= expensesMarker
     );
-    const expenses = expensesEntries.reduce((sum, e) => sum + e.amount, 0);
+    const expenses = expensesEntries.reduce((sum, e) => sum + e.amount, 0) + sumFinAdjustments('expenses', expensesMarker);
 
     const salaryMarker = loadFinResetMarker('salary');
     const salary = loadSalaryLedger()
       .filter(l => l.ts >= salaryMarker)
-      .reduce((sum, l) => sum + l.amount, 0);
+      .reduce((sum, l) => sum + l.amount, 0) + sumFinAdjustments('salary', salaryMarker);
 
     const launderingMarker = loadFinResetMarker('laundering');
     const laundering = loadLaunderingEntries()
@@ -8746,6 +8795,40 @@
     salary: 'le salaire total',
     laundering: 'le blanchiment'
   };
+  let finAdjustCurrentIndicator = null;
+
+  function getFinAdjustEntries(indicator){
+    return indicator === 'laundering' ? loadLaunderingEntries() : (loadFinAdjustments()[indicator] || []);
+  }
+  function saveFinAdjustEntries(indicator, list){
+    if(indicator === 'laundering'){
+      saveLaunderingEntries(list);
+    }else{
+      const all = loadFinAdjustments();
+      all[indicator] = list;
+      saveFinAdjustments(all);
+    }
+  }
+
+  function renderFinAdjustHistory(indicator){
+    const container = document.getElementById('finAdjustHistory');
+    if(!container) return;
+    const marker = loadFinResetMarker(indicator);
+    const entries = getFinAdjustEntries(indicator).filter(a => a.ts >= marker).sort((a, b) => b.ts - a.ts);
+    if(entries.length === 0){
+      container.innerHTML = '<p class="requests-empty">Aucun ajustement manuel pour le moment (depuis la dernière réinitialisation).</p>';
+      return;
+    }
+    container.innerHTML = '<p style="font-size:11.5px; color:var(--text-faint); text-transform:uppercase; margin-bottom:8px;">Ajustements manuels enregistrés</p>' +
+      entries.map(a => `
+        <div class="account-row" data-adj-id="${escapeHtml(a.id)}">
+          <span class="aname" style="color:${a.amount < 0 ? 'var(--red)' : 'var(--emerald)'};">${a.amount < 0 ? '' : '+'}${formatUSD(a.amount)}</span>
+          <span class="acreds">${escapeHtml(a.note || '')} — ${escapeHtml(a.by || 'Direction')}</span>
+          <button data-action="delete-fin-adjust" data-id="${escapeHtml(a.id)}">Annuler</button>
+        </div>
+      `).join('');
+  }
+
   (function setupFinancialIndicatorsDelegation(){
     const container = document.getElementById('financialIndicatorsBlock');
     if(!container || container.dataset.finDelegationReady) return;
@@ -8766,37 +8849,61 @@
         showSavedIndicator();
         return;
       }
-      if(e.target.closest('.fin-add-laundering-btn')){
-        const form = document.getElementById('launderingAddForm');
-        if(form) form.style.display = form.style.display === 'none' ? 'block' : 'none';
+      const adjustBtn = e.target.closest('.fin-adjust-btn');
+      if(adjustBtn){
+        const indicator = adjustBtn.dataset.indicator;
+        finAdjustCurrentIndicator = indicator;
+        const form = document.getElementById('finAdjustForm');
+        const title = document.getElementById('finAdjustFormTitle');
+        const label = FIN_INDICATOR_LABELS[indicator] || indicator;
+        if(title) title.textContent = `Ajuster ${label} — un montant positif ajoute, un montant négatif retire.`;
+        if(form) form.style.display = 'block';
+        document.getElementById('finAdjustAmountInput').value = '';
+        document.getElementById('finAdjustNoteInput').value = '';
+        renderFinAdjustHistory(indicator);
+        return;
+      }
+      const deleteAdjBtn = e.target.closest('button[data-action="delete-fin-adjust"]');
+      if(deleteAdjBtn && finAdjustCurrentIndicator){
+        const ok = window.confirm('Annuler cet ajustement ? Le montant correspondant sera retiré du calcul.');
+        if(!ok) return;
+        const list = getFinAdjustEntries(finAdjustCurrentIndicator).filter(a => a.id !== deleteAdjBtn.dataset.id);
+        saveFinAdjustEntries(finAdjustCurrentIndicator, list);
+        renderFinAdjustHistory(finAdjustCurrentIndicator);
+        renderFinancialIndicators();
+        addLog(`La Direction a annulé un ajustement manuel sur « ${escapeHtml(FIN_INDICATOR_LABELS[finAdjustCurrentIndicator] || finAdjustCurrentIndicator)} ».`);
+        showSavedIndicator();
         return;
       }
     });
   })();
 
-  const launderingAddConfirmBtn = document.getElementById('launderingAddConfirmBtn');
-  if(launderingAddConfirmBtn){
-    launderingAddConfirmBtn.addEventListener('click', () => {
-      const amountInput = document.getElementById('launderingAmountInput');
-      const noteInput = document.getElementById('launderingNoteInput');
+  const finAdjustConfirmBtn = document.getElementById('finAdjustConfirmBtn');
+  if(finAdjustConfirmBtn){
+    finAdjustConfirmBtn.addEventListener('click', () => {
+      if(!finAdjustCurrentIndicator) return;
+      const amountInput = document.getElementById('finAdjustAmountInput');
+      const noteInput = document.getElementById('finAdjustNoteInput');
       const amount = parseFloat(amountInput.value);
-      if(isNaN(amount) || amount <= 0){ amountInput.focus(); return; }
+      if(isNaN(amount) || amount === 0){ amountInput.focus(); return; }
       const by = session ? session.name : 'Direction';
-      const list = loadLaunderingEntries();
-      list.unshift({ id: 'ldr_' + Date.now(), amount, note: noteInput.value.trim(), ts: Date.now(), by });
-      saveLaunderingEntries(list);
-      addLog(`La Direction (<b>${escapeHtml(by)}</b>) a ajouté ${formatUSD(amount)} au blanchiment${noteInput.value.trim() ? ' (' + escapeHtml(noteInput.value.trim()) + ')' : ''}.`);
+      const list = getFinAdjustEntries(finAdjustCurrentIndicator);
+      list.unshift({ id: 'adj_' + Date.now(), amount, note: noteInput.value.trim(), ts: Date.now(), by });
+      saveFinAdjustEntries(finAdjustCurrentIndicator, list);
+      const label = FIN_INDICATOR_LABELS[finAdjustCurrentIndicator] || finAdjustCurrentIndicator;
+      addLog(`La Direction (<b>${escapeHtml(by)}</b>) a ${amount < 0 ? 'retiré' : 'ajouté'} ${formatUSD(Math.abs(amount))} ${amount < 0 ? 'de' : 'à'} « ${escapeHtml(label)} »${noteInput.value.trim() ? ' (' + escapeHtml(noteInput.value.trim()) + ')' : ''}.`);
       amountInput.value = '';
       noteInput.value = '';
-      document.getElementById('launderingAddForm').style.display = 'none';
+      renderFinAdjustHistory(finAdjustCurrentIndicator);
       renderFinancialIndicators();
       showSavedIndicator();
     });
   }
-  const launderingAddCancelBtn = document.getElementById('launderingAddCancelBtn');
-  if(launderingAddCancelBtn){
-    launderingAddCancelBtn.addEventListener('click', () => {
-      document.getElementById('launderingAddForm').style.display = 'none';
+  const finAdjustCancelBtn = document.getElementById('finAdjustCancelBtn');
+  if(finAdjustCancelBtn){
+    finAdjustCancelBtn.addEventListener('click', () => {
+      document.getElementById('finAdjustForm').style.display = 'none';
+      finAdjustCurrentIndicator = null;
     });
   }
 
@@ -9579,7 +9686,8 @@
     'echonews_wheel_config', 'echonews_wheel_config_published', 'echonews_wheel_spins',
     'echonews_event_audit_log', 'echonews_map_timestamps', 'echonews_custom_theme', 'echonews_maintenance_mode',
     'echonews_custom_pages', 'echonews_laundering_entries',
-    'echonews_fin_reset_ca', 'echonews_fin_reset_expenses', 'echonews_fin_reset_salary', 'echonews_fin_reset_laundering'
+    'echonews_fin_reset_ca', 'echonews_fin_reset_expenses', 'echonews_fin_reset_salary', 'echonews_fin_reset_laundering',
+    'echonews_fin_adjustments'
   ];
 
   let cloudDb = null;
