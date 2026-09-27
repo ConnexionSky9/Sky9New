@@ -10078,6 +10078,13 @@
             // sinon : remote déjà en place dans "merged", on le garde par défaut.
           });
           Object.keys(merged).forEach(k2 => {
+            // Important : même si cette clé est maintenant protégée (voir
+            // TOMBSTONE_EXEMPT_KEYS), une suppression définitive créée AVANT cette
+            // protection pouvait rester stockée pour toujours et continuer à
+            // s'appliquer indéfiniment ici, quoi qu'on fasse par ailleurs. On
+            // n'applique donc plus jamais de suppression définitive sur une clé
+            // actuellement protégée, peu importe l'ancienneté de cette suppression.
+            if(TOMBSTONE_EXEMPT_KEYS.includes(cloudKey)) return;
             if(isTombstoned(tombstones, cloudKey, k2)) delete merged[k2];
           });
           return merged;
