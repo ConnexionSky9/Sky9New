@@ -4860,6 +4860,12 @@
   function renderRequestsByType(isRechargeType, containerId, emptyMsg){
     const container = document.getElementById(containerId);
     if(!container) return;
+    // Protection : si quelqu'un est en train d'écrire un motif de refus dans cette
+    // liste, on ne reconstruit surtout pas tout maintenant (une synchronisation
+    // reçue d'un autre appareil, par exemple) — ça effaçait le texte en cours de
+    // frappe avant même d'avoir eu le temps de le terminer. On réessaiera au
+    // prochain rafraîchissement, une fois le formulaire refermé.
+    if(container.querySelector('input[id^="reason_"]')) return;
     const items = loadRequests().filter(r => r.status === 'pending' && !!r.isRecharge === isRechargeType);
 
     if(items.length === 0){
@@ -9859,7 +9865,7 @@
       // décocher une case empêchait ensuite de la recocher correctement pour tout le
       // monde (la case restait cochée chez celui qui l'avait faite, mais réapparaissait
       // toujours décochée pour les autres, la fusion excluant la clé pour toujours).
-      const TOMBSTONE_EXEMPT_KEYS = ['echonews_completed_ads', 'echonews_duty_status'];
+      const TOMBSTONE_EXEMPT_KEYS = ['echonews_completed_ads', 'echonews_duty_status', 'echonews_company_prices'];
       // Nettoyage ponctuel des tombstones déjà enregistrés par erreur avant ce correctif.
       (function purgeBadTombstones(){
         const tombstones = loadTombstones();
