@@ -2209,12 +2209,19 @@
           </div>
         </div>
 
-        <div class="kpi-row">
-          <div class="kpi">
-            <div class="label">Revenu pub / semaine</div>
-            <div class="value" id="kpiWeeklyRevenue">$0</div>
-            <div class="sub" id="kpiWeeklyRevenueSub">0 annonce(s) actives cette semaine</div>
+        <div class="requests-block" id="rechargeHistoryOverviewBlock">
+          <h2>Historique des rechargements (toutes entreprises)</h2>
+          <p style="font-size:13px; color:var(--text-dim); margin:-6px 0 16px;">Chaque demande de rechargement acceptée, toutes entreprises confondues, la plus récente en premier.</p>
+          <div class="field-pair" style="margin-bottom:14px;">
+            <div class="field">
+              <label for="rechargeHistorySearch">Rechercher une entreprise</label>
+              <input type="text" id="rechargeHistorySearch" placeholder="Nom de l'entreprise...">
+            </div>
           </div>
+          <div id="rechargeHistoryOverviewList"></div>
+        </div>
+
+        <div class="kpi-row">
           <div class="kpi">
             <div class="label">Annonces en attente</div>
             <div class="value" id="kpiPending">0</div>
@@ -2524,7 +2531,9 @@
           <div class="field-pair" style="margin-bottom:14px;">
             <div class="field">
               <label for="pricingCompanyPicker">Entreprise</label>
-              <select id="pricingCompanyPicker"></select>
+              <select id="pricingCompanyPicker">
+                <option value="" selected>— Choisir une entreprise —</option>
+              </select>
             </div>
             <div class="field">
               <label for="pricingAmountInput">Prix par annonce ($)</label>
@@ -6797,15 +6806,16 @@
     const picker = document.getElementById('pricingCompanyPicker');
     if(!picker) return;
     if(!picker.dataset.filled){
-      picker.innerHTML = COMPANY_ACCOUNTS.map(acc => `<option value="${escapeHtml(acc.display)}">${escapeHtml(acc.display)}</option>`).join('');
+      picker.innerHTML = '<option value="">— Choisir une entreprise —</option>' +
+        COMPANY_ACCOUNTS.map(acc => `<option value="${escapeHtml(acc.display)}">${escapeHtml(acc.display)}</option>`).join('');
       picker.dataset.filled = '1';
       picker.addEventListener('change', () => {
         const input = document.getElementById('pricingAmountInput');
-        if(input) input.value = getUnitPriceForCompany(picker.value);
+        if(input) input.value = picker.value ? getUnitPriceForCompany(picker.value) : '';
       });
     }
     const input = document.getElementById('pricingAmountInput');
-    if(input) input.value = getUnitPriceForCompany(picker.value);
+    if(input) input.value = picker.value ? getUnitPriceForCompany(picker.value) : '';
     renderCustomPricingList();
   }
 
@@ -8679,7 +8689,7 @@
     const payments = loadPayments().filter(p =>
       p.ts >= range.start.getTime() && p.ts <= range.end.getTime() &&
       (!revenueMarker || p.ts >= revenueMarker) &&
-      (p.manual || p.isRecharge === true || (p.isRecharge === undefined && /rechargement/i.test(p.label || '')))
+      isPaymentARecharge(p)
     );
     const adsCa = payments.reduce((sum, p) => sum + p.amount, 0);
 
@@ -8757,7 +8767,7 @@
     // avant l'ajout de ce champ : on se fie alors au libellé.
     const ca = loadPayments()
       .filter(p => p.ts >= caMarker)
-      .filter(p => p.manual || p.isRecharge === true || (p.isRecharge === undefined && /rechargement/i.test(p.label || '')))
+      .filter(isPaymentARecharge)
       .reduce((sum, p) => sum + p.amount, 0) + sumFinAdjustments('ca', caMarker);
 
     const expensesMarker = loadFinResetMarker('expenses');
@@ -8788,6 +8798,40 @@
     setVal('kpiSalaryTotal', vals.salary);
     setVal('kpiLaundering', vals.laundering);
   }
+
+  // Un paiement est un "vrai" rechargement payant, qu'il vienne d'une demande de
+  // rechargement acceptée ou d'une facturation manuelle — jamais une demande
+  // d'annonce (gratuite). Même repli de compatibilité que pour le Chiffre
+  // d'affaires, pour les paiements enregistrés avant l'ajout du champ isRecharge.
+  function isPaymentARecharge(p){
+    return !!(p.manual || p.isRecharge === true || (p.isRecharge === undefined && /rechargement/i.test(p.label || '')));
+  }
+
+  function renderRechargeHistoryOverview(){
+    const container = document.getElementById('rechargeHistoryOverviewList');
+    if(!container) return;
+    const searchEl = document.getElementById('rechargeHistorySearch');
+    const search = searchEl ? searchEl.value.toLowerCase().trim() : '';
+    let list = loadPayments().filter(isPaymentARecharge);
+    if(search) list = list.filter(p => (p.company || '').toLowerCase().includes(search));
+    list = list.slice().sort((a, b) => b.ts - a.ts);
+
+    if(list.length === 0){
+      container.innerHTML = '<p class="requests-empty">Aucun rechargement accepté pour le moment.</p>';
+      return;
+    }
+    const totalShown = list.reduce((sum, p) => sum + p.amount, 0);
+    container.innerHTML =
+      `<p style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">${list.length} rechargement(s) — total ${formatUSD(totalShown)}</p>` +
+      list.map(p => `
+        <div class="account-row">
+          <span class="aname">${escapeHtml(p.company)}</span>
+          <span class="acreds">${formatUSD(p.amount)} — ${new Date(p.ts).toLocaleString('fr-FR')} — par ${escapeHtml(p.by || 'Direction')}</span>
+        </div>
+      `).join('');
+  }
+  const rechargeHistorySearch = document.getElementById('rechargeHistorySearch');
+  if(rechargeHistorySearch) rechargeHistorySearch.addEventListener('input', renderRechargeHistoryOverview);
 
   const FIN_INDICATOR_LABELS = {
     ca: "le chiffre d'affaires",
@@ -9277,6 +9321,11 @@
         });
         saveTaxHistory(history);
         try{ localStorage.setItem(LS_REVENUE_RESET_KEY, String(Date.now())); }catch(e){}
+        // Le Chiffre d'affaires (Vue d'ensemble) est maintenant la base de
+        // l'impôt : on réinitialise ce compteur-là aussi, sinon le même montant
+        // resterait affiché comme imposable la prochaine fois.
+        saveFinResetMarker('ca', Date.now());
+        renderFinancialIndicators();
         addLog(`Impôts de la semaine du ${escapeHtml(weekLabel)} validés par <b>${escapeHtml(by)}</b> — ${formatUSD(tax)}.`);
         renderTax();
         renderOverviewStats();
@@ -9291,7 +9340,11 @@
   function renderTax(){
     const container = document.getElementById('taxContent');
     const wk = computeWeeklyCA();
-    const ca = wk.total;
+    // La base de l'impôt est le Chiffre d'affaires affiché en Vue d'ensemble
+    // (rechargements uniquement, depuis sa dernière réinitialisation) — pas un
+    // calcul séparé propre à cette page, pour que les deux restent toujours
+    // cohérents entre eux.
+    const ca = computeFinancialIndicators().ca;
     const tax = ca * TAX_RATE;
     const net = ca - tax;
 
@@ -9412,15 +9465,9 @@
 
   function renderOverviewStats(){
     renderFinancialIndicators();
+    renderRechargeHistoryOverview();
     const totalEl = document.getElementById('kpiTotalDiffused');
     const top3El = document.getElementById('top3List');
-    const revenueEl = document.getElementById('kpiWeeklyRevenue');
-    const revenueSubEl = document.getElementById('kpiWeeklyRevenueSub');
-    if(revenueEl){
-      const wk = computeWeeklyCA();
-      revenueEl.textContent = formatUSD(wk.total);
-      if(revenueSubEl) revenueSubEl.textContent = wk.payments.length + ' paiement(s) validé(s) cette semaine';
-    }
     renderWeeklyCompanyRecap();
 
     const effectifEl = document.getElementById('kpiEffectif');
@@ -10131,7 +10178,7 @@
           'applyEmployeeDirectionAccess', 'renderRechargeRecap',
           'renderEntChatThread', 'renderDirChatThread', 'checkForNewChatMessages', 'renderTickerBanner',
           'renderWheelPlay', 'renderWheelAdminForm',
-          'renderEventStats', 'renderEventAudit', 'applyCustomTheme', 'injectCustomPagesIntoNav', 'renderFinancialIndicators'
+          'renderEventStats', 'renderEventAudit', 'applyCustomTheme', 'injectCustomPagesIntoNav', 'renderFinancialIndicators', 'renderRechargeHistoryOverview'
           // 'applySession' retiré volontairement : il forçait un retour sur l'onglet
           // principal du rôle et un scroll en haut de page à CHAQUE synchronisation
           // cloud (y compris pour ses propres actions), ce qui donnait l'impression
